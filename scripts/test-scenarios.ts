@@ -28,7 +28,9 @@ const RENT_CEILING = 5_654;
 function expectedStart(inp: SimInputs): number {
   if (inp.apartmentType !== "upgrader") return inp.equity;
   const fee = (inp.useBroker ? 0.025 : 0.005) * 1.18;
-  return inp.equity + Math.max(0, inp.oldHomeValue * (1 - fee) - Math.min(inp.oldHomeMortgage, inp.oldHomeValue));
+  const mortgage = Math.min(inp.oldHomeMortgage, inp.oldHomeValue);
+  const prepay = mortgage > 0 ? inp.oldHomePrepayFee : 0;
+  return inp.equity + Math.max(0, inp.oldHomeValue * (1 - fee) - mortgage - prepay);
 }
 
 /** Independent month-1 rent after vacancy, rent tax (cheaper track), 8% maintenance, ₪150 insurance. */
@@ -50,9 +52,9 @@ const EQUITY = [0, 200_000, 350_000, 600_000, 1_500_000, 3_000_000]; // 0 → ra
 const YEARS = [5, 15, 30];
 // Upgrader: cheap home fully mortgaged (no proceeds, cash topped up to ₪200K), mid home, expensive home above the exemption ceiling
 const OLD_HOMES: Partial<SimInputs>[] = [
-  { oldHomeValue: 600_000, oldHomeMortgage: 600_000 },
-  { oldHomeValue: 2_000_000, oldHomeMortgage: 500_000 },
-  { oldHomeValue: 6_000_000, oldHomeMortgage: 0 },
+  { oldHomeValue: 600_000, oldHomeMortgage: 600_000, sellFirst: true },
+  { oldHomeValue: 2_000_000, oldHomeMortgage: 500_000, oldHomePrepayFee: 15_000, sellFirst: false },
+  { oldHomeValue: 6_000_000, oldHomeMortgage: 0, oldHomePrepayFee: 50_000, sellFirst: true },
 ];
 const MARKETS: Record<string, Partial<SimInputs>> = {
   low: { mortgageRate: 2.5, rentalYield: 2.2, rentGrowth: 1, appreciation: 1, spReturn: 5, spFee: 0.05, inflation: 1 },
@@ -110,9 +112,10 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   check(nums.every(Number.isFinite), "all outputs finite", ctx);
 
   // 2. Bank limits and price bounds
-  check(re.ltv <= MAX_LTV[inp.apartmentType] + 1e-9, "LTV within bank limit", ctx);
+  const limit = inp.apartmentType === "upgrader" && inp.sellFirst ? MAX_LTV.single : MAX_LTV[inp.apartmentType];
+  check(re.ltv <= limit + 1e-9 && re.maxLtv === limit, "LTV within bank limit (upgrader selling first → 75%)", ctx);
   check(re.propertyPrice <= re.maxPrice && re.propertyPrice >= BOUNDS.propertyPrice.min, "price within cap and bounds", ctx);
-  check(re.maxPrice === maxAffordablePrice(cash, inp.apartmentType, inp.useBroker), "max price recomputes", ctx);
+  check(re.maxPrice === maxAffordablePrice(cash, inp.apartmentType, inp.useBroker, inp.sellFirst), "max price recomputes", ctx);
   check(!re.equityShortfall, "cash covers tax + costs + down payment", ctx);
   if (inp.autoPrice) check(re.propertyPrice === re.maxPrice, "auto mode uses max price", ctx);
   else check(re.propertyPrice === Math.min(inp.propertyPrice, re.maxPrice), "manual price respected unless capped", ctx);

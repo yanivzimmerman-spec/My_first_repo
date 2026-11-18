@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, AlertTriangle } from "lucide-react";
-import { BOUNDS, MAX_LTV, MIN_START_CAPITAL, type ApartmentType, type SimInputs, type SimResult } from "@/lib/calculator";
+import { BOUNDS, MIN_START_CAPITAL, PTI_MAX, PTI_WARN, type ApartmentType, type SimInputs, type SimResult } from "@/lib/calculator";
 import { formatCompactILS, formatILS, formatPct } from "@/lib/format";
 import SliderInput from "./SliderInput";
 import { Segmented, Switch } from "./Toggle";
@@ -19,7 +19,7 @@ interface Props {
 
 const TYPE_TEXT: Record<ApartmentType, string> = {
   single: "זו תהיה הדירה היחידה שלכם. מס רכישה נמוך, ואין מס כשמוכרים. הבנק מממן עד 75%.",
-  upgrader: "מוכרים את הדירה שיש לכם וקונים אחרת. מס רכישה כמו דירה יחידה, והבנק מממן עד 70%.",
+  upgrader: "מוכרים את הדירה שיש לכם וקונים אחרת. מס רכישה כמו דירה יחידה.",
   additional: "יש לכם כבר דירה ואתם שומרים אותה. מס רכישה 8%, מס 25% על הרווח כשמוכרים, והבנק מממן עד 50%.",
 };
 
@@ -151,6 +151,28 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               accent={RE}
               onChange={(v) => set("oldHomeMortgage", v)}
             />
+            {inputs.oldHomeMortgage > 0 && (
+              <SliderInput
+                label="עמלת פירעון מוקדם"
+                kind="currency"
+                value={inputs.oldHomePrepayFee}
+                bound={BOUNDS.oldHomePrepayFee}
+                accent={RE}
+                onChange={(v) => set("oldHomePrepayFee", v)}
+                hint="אפס במסלול פריים. במסלולים קבועים יכולה להגיע לאחוזים מהיתרה. הבנק נותן את הסכום המדויק."
+              />
+            )}
+            <div>
+              <label className="flex cursor-pointer items-center justify-between gap-3">
+                <span className="text-[15px] text-slate-700">מוכרים לפני שקונים</span>
+                <Switch label="מוכרים לפני שקונים" checked={inputs.sellFirst} onChange={(v) => set("sellFirst", v)} accent={RE} />
+              </label>
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+                {inputs.sellFirst
+                  ? "כשקונים אין לכם דירה, לכן הבנק מממן עד 75%."
+                  : "קונים כשהדירה הישנה עדיין שלכם: הבנק מממן עד 70%, וצריך למכור אותה תוך 24 חודשים. עד אז הכסף מגיע מחסכונות או מהלוואת גישור."}
+              </p>
+            </div>
             <p className="text-[13px] leading-relaxed text-slate-600">
               אחרי עמלות מכירה של {formatILS(re.oldHomeSellingCosts)} וסגירת המשכנתא נשארים לכם{" "}
               <span className="font-semibold text-slate-900">{formatILS(re.oldHomeNetProceeds)}</span>. יחד עם המזומן זה{" "}
@@ -193,7 +215,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               עם {formatILS(re.startCapital)}
               {inputs.loanEnabled && <> ועוד הלוואה של {formatILS(inputs.loanAmount)}</>} אפשר לקנות {TYPE_NAME[type]} עד{" "}
               <span className="font-semibold text-slate-900">{formatILS(re.maxPrice)}</span>. הבנק מממן עד{" "}
-              {formatPct(MAX_LTV[type] * 100, 0)}, ואת השאר, כולל מס רכישה של {formatILS(re.purchaseTax)} ועלויות
+              {formatPct(re.maxLtv * 100, 0)}, ואת השאר, כולל מס רכישה של {formatILS(re.purchaseTax)} ועלויות
               קנייה, אתם משלמים.
             </p>
           </div>
@@ -263,11 +285,11 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         />
 
         <AddOn
-          title="הלוואה לקניית הדירה"
+          title="הלוואה להון העצמי"
           accent={LOAN}
           checked={inputs.loanEnabled}
           onChange={(v) => set("loanEnabled", v)}
-          description={'הלוואה אישית או "כל מטרה" שמגדילה את הכסף לקנייה, כדי לקנות דירה יקרה יותר.'}
+          description="כסף מושאל שמגדיל את ההון העצמי, כדי לקנות דירה יקרה יותר."
         >
           <SliderInput
             label="סכום"
@@ -285,7 +307,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             bound={BOUNDS.loanRate}
             accent={LOAN}
             onChange={(v) => set("loanRate", v)}
-            hint="בדרך כלל 7% עד 9%"
+            hint="הלוואות צרכניות: כ-8% בממוצע ב-2026"
           />
           <SliderInput
             label="לכמה שנים"
@@ -298,7 +320,11 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           />
           <p className="flex gap-2 rounded-lg bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-900">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            הבנק בודק מאיפה ההון העצמי, וההחזרים של כל ההלוואות נספרים במגבלה של 50% מההכנסה. ייתכן שהמשכנתא לא תאושר.
+            <span>
+              לפי בנק ישראל, בנק <b>לא רשאי</b> לתת הלוואה שמיועדת לשמש הון עצמי, גם לא על דירה אחרת שלכם. הדרך המותרת:
+              קרוב משפחה מדרגה ראשונה לוקח הלוואה על הדירה שלו (עד 50% משוויה). גם החזרי הלוואה כזו נספרים במגבלת 50%
+              מההכנסה.
+            </span>
           </p>
         </AddOn>
 
@@ -325,7 +351,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             bound={BOUNDS.spLoanRate}
             accent={LOAN}
             onChange={(v) => set("spLoanRate", v)}
-            hint="הלוואה כנגד תיק השקעות: בדרך כלל פריים + 1% עד 2% (כ-6% עד 7%)"
+            hint="הלוואה כנגד תיק השקעות, בדרך כלל צמודה לפריים (כיום 4.75%) ועוד 1% עד 2%"
           />
           <SliderInput
             label="לכמה שנים"
@@ -338,8 +364,42 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           />
           <p className="flex gap-2 rounded-lg bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-900">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            השקעה בכסף מושאל מגדילה גם את ההפסד כשהשוק יורד. בירידה חדה הבנק עלול לדרוש החזר מיידי.
+            השקעה בכסף מושאל מגדילה גם את ההפסד כשהשוק יורד. בירידה חדה הבנק עלול לדרוש החזר מיידי או למכור את
+            המניות. הריבית לא מנוכה מהרווח בחישוב.
           </p>
+        </AddOn>
+        <AddOn
+          title="לבדוק אם הבנק יאשר"
+          accent="#0F172A"
+          checked={inputs.incomeCheck}
+          onChange={(v) => set("incomeCheck", v)}
+          description="בנק ישראל אוסר משכנתא שההחזר עליה גבוה מ-50% מההכנסה הפנויה."
+        >
+          <SliderInput
+            label="הכנסה חודשית נטו של משק הבית"
+            kind="currency"
+            value={inputs.monthlyIncome}
+            bound={BOUNDS.monthlyIncome}
+            onChange={(v) => set("monthlyIncome", v)}
+          />
+          {re.paymentToIncome !== null && (
+            <p
+              className={`rounded-lg p-3 text-[13px] font-medium leading-relaxed ${
+                re.paymentToIncome > PTI_MAX
+                  ? "bg-red-50 text-red-800"
+                  : re.paymentToIncome > PTI_WARN
+                    ? "bg-amber-50 text-amber-900"
+                    : "bg-emerald-50 text-emerald-800"
+              }`}
+            >
+              ההחזר החודשי הוא {formatPct(re.paymentToIncome * 100, 0)} מההכנסה.{" "}
+              {re.paymentToIncome > PTI_MAX
+                ? "מעל 50%: הבנק לא יאשר. נסו דירה זולה יותר או תקופה ארוכה יותר."
+                : re.paymentToIncome > PTI_WARN
+                  ? "בין 40% ל-50%: מותר, אבל בנקים נזהרים ועלולים לסרב."
+                  : "עד 40%: סביר שהבנק יאשר."}
+            </p>
+          )}
         </AddOn>
       </Group>
 

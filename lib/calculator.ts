@@ -62,10 +62,26 @@ export const SHEVACH_SINGLE_CEILING = 5_008_000;
 export const SURTAX_RATE = 0.05;
 export const SURTAX_THRESHOLD = 721_560;
 /** Non-exempt apartment sales at or below this value are excluded from surtax */
-export const SURTAX_RE_SALE_THRESHOLD = 5_382_285;
+export const SURTAX_RE_SALE_THRESHOLD = 5_385_285;
 
-/** Bank of Israel LTV limits (Directive 329) */
+/**
+ * Bank of Israel payment-to-income (Directive 329, sections 5–6): no housing
+ * loan above 50% of disposable income; above 40% banks treat it as high risk.
+ */
+export const PTI_MAX = 0.5;
+export const PTI_WARN = 0.4;
+
+/**
+ * Bank of Israel LTV limits (Directive 329 §2): 75% when the buyer owns no
+ * other apartment, 70% for a replacement buyer who still owns the old one and
+ * undertakes to sell it, 50% otherwise.
+ */
 export const MAX_LTV = { single: 0.75, upgrader: 0.7, additional: 0.5 } as const;
+
+/** An upgrader who sells first owns nothing at purchase, so the 75% limit applies. */
+export function maxLtvFor(type: ApartmentType, sellFirst: boolean): number {
+  return type === "upgrader" && sellFirst ? MAX_LTV.single : MAX_LTV[type];
+}
 
 /** Dividend withholding drag inside the fund, % per year of fund value */
 export const DIVIDEND_DRAG = { israeli: 0.0025, irish: 0.0019 } as const;
@@ -82,6 +98,10 @@ export interface SimInputs {
   /** Upgrader only: value of the apartment being sold, and the mortgage left on it */
   oldHomeValue: number;
   oldHomeMortgage: number;
+  /** Early-repayment fee on the old mortgage, ₪ (0 on prime tracks) */
+  oldHomePrepayFee: number;
+  /** Upgrader sells the old home before buying (owns nothing at purchase → 75% LTV) */
+  sellFirst: boolean;
   years: number;
   propertyPrice: number;
   autoPrice: boolean;
@@ -105,6 +125,9 @@ export interface SimInputs {
   spLoanAmount: number;
   spLoanRate: number;
   spLoanTerm: number;
+  /** Optional bank-approval check: household's net monthly income */
+  incomeCheck: boolean;
+  monthlyIncome: number;
 }
 
 type NumericKey = {
@@ -124,6 +147,7 @@ export const BOUNDS: Record<NumericKey, Bound> = {
   equity: { min: 0, max: 3_000_000, step: 10_000 },
   oldHomeValue: { min: 500_000, max: 8_000_000, step: 10_000 },
   oldHomeMortgage: { min: 0, max: 8_000_000, step: 10_000 },
+  oldHomePrepayFee: { min: 0, max: 300_000, step: 1_000 },
   years: { min: 5, max: 30, step: 1 },
   propertyPrice: { min: 300_000, max: 5_000_000, step: 10_000 },
   mortgageRate: { min: 1, max: 9, step: 0.05 },
@@ -140,12 +164,15 @@ export const BOUNDS: Record<NumericKey, Bound> = {
   spLoanAmount: { min: 10_000, max: 1_500_000, step: 10_000 },
   spLoanRate: { min: 2, max: 15, step: 0.1 },
   spLoanTerm: { min: 1, max: 20, step: 1 },
+  monthlyIncome: { min: 5_000, max: 100_000, step: 500 },
 };
 
 export const DEFAULT_INPUTS: SimInputs = {
   equity: 600_000,
   oldHomeValue: 2_000_000,
   oldHomeMortgage: 500_000,
+  oldHomePrepayFee: 0,
+  sellFirst: true,
   years: 15,
   propertyPrice: 2_000_000,
   autoPrice: false,
@@ -163,12 +190,14 @@ export const DEFAULT_INPUTS: SimInputs = {
   inflation: 2.5,
   loanEnabled: false,
   loanAmount: 200_000,
-  loanRate: 7.5,
-  loanTerm: 10,
+  loanRate: 8,
+  loanTerm: 7,
   spLoanEnabled: false,
   spLoanAmount: 200_000,
   spLoanRate: 6.5,
   spLoanTerm: 10,
+  incomeCheck: false,
+  monthlyIncome: 25_000,
 };
 
 // ---------------------------------------------------------------------------
@@ -216,6 +245,8 @@ export interface RealEstateSummary {
   extraLoanPayment: number;
   extraLoanInterestPaid: number;
   extraLoanRemaining: number;
+  /** Month-1 housing payments ÷ income (null when the check is off) */
+  paymentToIncome: number | null;
   initialMonthlyRentGross: number;
   initialMonthlyRentNet: number;
   /** Mortgage + loan payments − net rent in month 1 (positive = out of pocket) */
@@ -295,7 +326,7 @@ function safeNum(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-const BOOL_KEYS: BoolKey[] = ["autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled"];
+const BOOL_KEYS: BoolKey[] = ["sellFirst", "autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "incomeCheck"];
 
 /** Coerce arbitrary (possibly URL-sourced) input into a valid SimInputs. */
 export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApartment", unknown>>): SimInputs {
@@ -385,9 +416,9 @@ export function surtax(capitalIncome: number, threshold: number): number {
  * Cash must cover purchase tax + buying costs + the minimum down payment
  * (25% single, 30% upgrader, 50% additional). Rounded down to the slider step.
  */
-export function maxAffordablePrice(cash: number, type: ApartmentType, useBroker = true): number {
+export function maxAffordablePrice(cash: number, type: ApartmentType, useBroker = true, sellFirst = false): number {
   const b = BOUNDS.propertyPrice;
-  const maxLtv = MAX_LTV[type];
+  const maxLtv = maxLtvFor(type, sellFirst);
   const fits = (p: number) => cash - purchaseTax(p, type) - buyingCosts(p, useBroker) >= (1 - maxLtv) * p - 1e-6;
   if (fits(b.max)) return b.max;
   let lo = 0;
@@ -413,7 +444,8 @@ export function oldHomeProceeds(inputs: SimInputs): { net: number; sellingCosts:
   if (inputs.apartmentType !== "upgrader") return { net: 0, sellingCosts: 0 };
   const sellingCosts = inputs.oldHomeValue * sellingCostRate(inputs.useBroker);
   const mortgage = Math.min(inputs.oldHomeMortgage, inputs.oldHomeValue);
-  return { net: Math.max(0, inputs.oldHomeValue - sellingCosts - mortgage), sellingCosts };
+  const prepay = mortgage > 0 ? inputs.oldHomePrepayFee : 0;
+  return { net: Math.max(0, inputs.oldHomeValue - sellingCosts - mortgage - prepay), sellingCosts };
 }
 
 /** The user's own money at the start, the same in both tracks. */
@@ -428,7 +460,7 @@ export function purchaseCash(inputs: SimInputs): number {
 
 /** Price used in the simulation: the user's choice (or the maximum in auto mode), never above the bank limit. */
 export function effectivePropertyPrice(inputs: SimInputs): number {
-  const cap = maxAffordablePrice(purchaseCash(inputs), inputs.apartmentType, inputs.useBroker);
+  const cap = maxAffordablePrice(purchaseCash(inputs), inputs.apartmentType, inputs.useBroker, inputs.sellFirst);
   return inputs.autoPrice ? cap : Math.min(inputs.propertyPrice, cap);
 }
 
@@ -457,7 +489,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   } = inputs;
 
   const cash = purchaseCash(inputs);
-  const maxPrice = maxAffordablePrice(cash, apartmentType, useBroker);
+  const maxPrice = maxAffordablePrice(cash, apartmentType, useBroker, inputs.sellFirst);
   const price = effectivePropertyPrice(inputs);
   const totalMonths = years * 12;
 
@@ -481,7 +513,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const downPayment = Math.max(0, Math.min(price, downPaymentRaw));
   const loanAmount = Math.max(0, price - downPaymentRaw);
   const unusedCash = Math.max(0, downPaymentRaw - price);
-  const maxLtv = MAX_LTV[apartmentType];
+  const maxLtv = maxLtvFor(apartmentType, inputs.sellFirst);
   const ltv = price > 0 ? loanAmount / price : 0;
   const pmt = spitzerPayment(loanAmount, mortgageRate, mortgageTerm);
   const termMonths = mortgageTerm * 12;
@@ -701,6 +733,10 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     extraLoanPayment: extraPmt,
     extraLoanInterestPaid: extraInterest,
     extraLoanRemaining: extraBalance,
+    // Loans with more than 18 months left count against income
+    paymentToIncome: inputs.incomeCheck
+      ? (pmt + (inputs.loanEnabled && inputs.loanTerm * 12 > 18 ? extraPmt : 0)) / inputs.monthlyIncome
+      : null,
     initialMonthlyRentGross: initialRentGross,
     initialMonthlyRentNet: initialRentNet,
     initialMonthlyGap: initialGap,

@@ -60,8 +60,13 @@ ok(flat.sp500.grossValue <= flat.sp500.totalCashInvested && flat.sp500.capitalGa
 // Additional apartment pays shevach; first doesn't
 const add = simulate({ ...DEFAULT_INPUTS, apartmentType: "additional", equity: 1_000_000 });
 ok(add.realEstate.shevachTax > 0 && !add.realEstate.shevachExempt, "additional apt pays מס שבח");
-const upg = simulate({ ...DEFAULT_INPUTS, apartmentType: "upgrader", equity: 1_000_000, propertyPrice: 2_500_000 });
-ok(upg.realEstate.shevachExempt && upg.realEstate.maxLtv === 0.7, "upgrader: exempt on sale, 70% LTV");
+const upg = simulate({ ...DEFAULT_INPUTS, apartmentType: "upgrader", sellFirst: false, equity: 1_000_000, propertyPrice: 2_500_000 });
+ok(upg.realEstate.shevachExempt && upg.realEstate.maxLtv === 0.7, "upgrader buying first: exempt on sale, 70% LTV");
+ok(simulate({ ...DEFAULT_INPUTS, apartmentType: "upgrader", sellFirst: true }).realEstate.maxLtv === 0.75, "upgrader selling first owns nothing at purchase → 75% LTV");
+{
+  const fee = simulate({ ...DEFAULT_INPUTS, apartmentType: "upgrader", equity: 0, oldHomeValue: 2_000_000, oldHomeMortgage: 500_000, oldHomePrepayFee: 15_000 });
+  ok(near(fee.realEstate.oldHomeNetProceeds, 2_000_000 * (1 - 0.0295) - 500_000 - 15_000, 0.01), "early-repayment fee comes off the sale proceeds");
+}
 ok(r.realEstate.shevachTax === 0 && r.realEstate.shevachExempt, "first apt exempt");
 
 // Equity exceeding price → no loan, leftover invested
