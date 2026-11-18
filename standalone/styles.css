@@ -1,0 +1,6 @@
+@import "../app/globals.css";
+@source "../components";
+:root {
+  --font-heebo: "Heebo";
+  color-scheme: light;
+}

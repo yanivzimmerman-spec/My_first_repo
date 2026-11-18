@@ -11,6 +11,9 @@ import VerdictBanner, { verdictText } from "./VerdictBanner";
 import GrowthChart from "./GrowthChart";
 import Breakdown from "./Breakdown";
 
+/** Static single-file build (claude.ai page): no query-string routing there. */
+const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
+
 const sameInputs = (a: SimInputs, b: SimInputs) =>
   (Object.keys(a) as (keyof SimInputs)[]).every((k) => a[k] === b[k]);
 
@@ -43,14 +46,14 @@ export default function Simulator() {
 
   // Load a shared scenario from the URL once on mount.
   useEffect(() => {
-    const fromUrl = queryToInputs(window.location.search);
+    const fromUrl = STANDALONE ? null : queryToInputs(window.location.search);
     if (fromUrl) setInputs(fromUrl);
     setHydrated(true);
   }, []);
 
   // Keep the URL in sync (no reload, no history spam).
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || STANDALONE) return;
     const q = inputsToQuery(inputs);
     const url = `${window.location.pathname}${q ? `?${q}` : ""}`;
     window.history.replaceState(null, "", url);
@@ -70,7 +73,7 @@ export default function Simulator() {
       `🏠 דירה להשקעה: ${formatILS(result.realEstate.netWorth)} נטו`,
       `📈 S&P 500: ${formatILS(result.sp500.netWorth)} נטו`,
       `(הון עצמי ${formatILS(inputs.equity)}, ${inputs.isFirstApartment ? "דירה יחידה" : "דירה נוספת"}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
-      url,
+      ...(STANDALONE ? [] : [url]),
     ]
       .join("\n")
       .replace(/[\u2066-\u2069]/g, "");
@@ -85,7 +88,7 @@ export default function Simulator() {
     result.winner === "realEstate" ? "text-re-ink" : result.winner === "sp500" ? "text-sp-ink" : "text-slate-700";
 
   return (
-    <div className="mx-auto max-w-[1280px] px-4 pb-16 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1280px] pr-[max(16px,env(safe-area-inset-right,0px))] pl-[max(16px,env(safe-area-inset-left,0px))] pb-16 sm:px-6 lg:px-8">
       {/* ---------- Header ---------- */}
       <header className="flex flex-wrap items-center justify-between gap-3 pt-5 pb-4 sm:pt-8">
         <div className="flex items-center gap-3">
@@ -144,7 +147,7 @@ export default function Simulator() {
       </div>
 
       {/* ---------- Mobile sticky summary bar ---------- */}
-      <div className="sticky top-0 z-30 -mx-4 mb-4 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur lg:hidden">
+      <div className="sticky top-[env(safe-area-inset-top,0px)] z-30 -mx-4 mb-4 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className={`truncate text-sm font-bold ${winColor}`}>
