@@ -1,6 +1,6 @@
 /* Sanity + fuzz tests for lib/calculator.ts — run with `npm test`. */
 import {
-  simulate, purchaseTax, spitzerPayment, sanitizeInputs, BOUNDS, DEFAULT_INPUTS,
+  simulate, purchaseTax, spitzerPayment, sanitizeInputs, maxAffordablePrice, BOUNDS, DEFAULT_INPUTS,
   type SimInputs,
 } from "../lib/calculator.ts";
 
@@ -50,9 +50,16 @@ ok(r.realEstate.shevachTax === 0 && r.realEstate.shevachExempt, "first apt exemp
 const rich = simulate({ ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 500_000 });
 ok(rich.realEstate.loanAmount === 0 && rich.realEstate.sideFundValue > 0, "unused equity → side fund, no loan");
 
-// Shortfall → flagged, still finite
-const poor = simulate({ ...DEFAULT_INPUTS, equity: 200_000, propertyPrice: 5_000_000, isFirstApartment: false });
-ok(poor.realEstate.equityShortfall, "shortfall flagged");
+// Bank financing limits are enforced (50% additional / 75% single)
+ok(maxAffordablePrice(350_000, false) === 580_000, "₪350K, additional apt → max price ₪580K (0.6·P ≤ 350K)");
+const capped = simulate({ ...DEFAULT_INPUTS, equity: 350_000, isFirstApartment: false, propertyPrice: 2_000_000 });
+ok(capped.realEstate.propertyPrice === 580_000 && capped.realEstate.priceCapped, "₪2M choice is capped to ₪580K");
+ok(capped.realEstate.ltv <= 0.5 + 1e-9, `additional apt LTV ≤ 50% (got ${(capped.realEstate.ltv * 100).toFixed(1)}%)`);
+const single = simulate({ ...DEFAULT_INPUTS, equity: 350_000, isFirstApartment: true, propertyPrice: 5_000_000 });
+ok(single.realEstate.ltv <= 0.75 + 1e-9 && single.realEstate.propertyPrice > 1_000_000, "single apt LTV ≤ 75%");
+const auto = simulate({ ...DEFAULT_INPUTS, equity: 1_000_000, isFirstApartment: false, autoPrice: true });
+ok(auto.realEstate.propertyPrice === maxAffordablePrice(1_000_000, false), "auto mode buys the max the bank allows");
+ok(!simulate({ ...DEFAULT_INPUTS, equity: 200_000, propertyPrice: 5_000_000, isFirstApartment: false }).realEstate.equityShortfall, "equity always covers costs + down payment");
 
 // Fuzz: random + extreme inputs never produce NaN/Infinity
 const keys = Object.keys(BOUNDS) as (keyof typeof BOUNDS)[];
@@ -62,6 +69,7 @@ const check = (inp: Partial<SimInputs>) => {
   const nums: number[] = [s.difference, ...Object.values(s.realEstate).filter((v) => typeof v === "number") as number[],
     ...Object.values(s.sp500) as number[], ...s.points.flatMap((p) => [p.realEstate, p.sp500, p.propertyValue, p.mortgageBalance])];
   if (nums.some((n) => !Number.isFinite(n))) { bad++; if (bad < 3) console.error("non-finite for", inp); }
+  if (s.realEstate.ltv > s.realEstate.maxLtv + 1e-9 || s.realEstate.equityShortfall) { bad++; if (bad < 3) console.error("LTV over limit for", inp); }
 };
 for (let i = 0; i < 3000; i++) {
   const inp: Record<string, unknown> = {};
@@ -75,7 +83,7 @@ for (let i = 0; i < 3000; i++) {
 }
 check(sanitizeInputs({ equity: "abc", years: NaN, propertyPrice: Infinity, mortgageRate: -5, spReturn: "1e9" } as never));
 check({} as Partial<SimInputs>);
-ok(bad === 0, "fuzz: 3000+ random/extreme/garbage inputs, all outputs finite");
+ok(bad === 0, "fuzz: 3000+ random/extreme/garbage inputs, all finite, LTV never over the bank limit");
 
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll tests passed");

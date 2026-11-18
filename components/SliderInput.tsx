@@ -39,7 +39,8 @@ export default function SliderInput({
 }: Props) {
   const id = useId();
   const [draft, setDraft] = useState<string | null>(null);
-  const pct = ((value - bound.min) / (bound.max - bound.min)) * 100;
+  const span = bound.max - bound.min;
+  const pct = span > 0 ? ((value - bound.min) / span) * 100 : 100;
 
   const commit = (s: string) => {
     const n = parseLooseNumber(s);
@@ -95,7 +96,7 @@ export default function SliderInput({
         max={bound.max}
         step={bound.step}
         value={value}
-        disabled={disabled}
+        disabled={disabled || span <= 0}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ ["--pct" as string]: `${Math.min(100, Math.max(0, pct))}%`, ["--accent" as string]: accent }}
       />

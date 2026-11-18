@@ -75,7 +75,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             label="מחיר הדירה"
             kind="currency"
             value={re.propertyPrice}
-            bound={BOUNDS.propertyPrice}
+            bound={{ ...BOUNDS.propertyPrice, max: re.maxPrice }}
             accent={RE}
             disabled={inputs.autoPrice}
             onChange={(v) => set("propertyPrice", v)}
@@ -86,27 +86,29 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               </>
             }
           />
+          <div className="mt-3 rounded-lg bg-slate-50 p-3 text-[13px] leading-relaxed text-slate-600">
+            {re.priceCapped && (
+              <p className="mb-1 flex gap-1.5 font-medium text-amber-800">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                המחיר שבחרתם גבוה ממה שהבנק יממן, לכן החישוב נעשה לפי המקסימום.
+              </p>
+            )}
+            <p>
+              עם {formatILS(inputs.equity)} הון עצמי אפשר לקנות{" "}
+              {inputs.isFirstApartment ? "דירה יחידה" : "דירה נוספת"} עד{" "}
+              <span className="font-semibold text-slate-900">{formatILS(re.maxPrice)}</span>. הבנק מממן עד{" "}
+              {inputs.isFirstApartment ? "75%" : "50%"}, והשאר, כולל מס רכישה ועלויות, מגיע מההון העצמי.
+            </p>
+          </div>
           <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 text-[13px] text-slate-600">
-            <span>חשבו לי את המחיר לפי 25% הון עצמי</span>
+            <span>קנו את הדירה היקרה ביותר שהבנק יממן</span>
             <Switch
-              label="חישוב מחיר אוטומטי"
+              label="מחיר מקסימלי אוטומטי"
               checked={inputs.autoPrice}
               onChange={(v) => set("autoPrice", v)}
               accent={RE}
             />
           </label>
-          {(re.ltvExceeded || re.equityShortfall) && (
-            <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-900">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              <span>
-                {re.equityShortfall
-                  ? "ההון העצמי לא מכסה את מס הרכישה והעלויות. בחרו דירה זולה יותר."
-                  : `הבנק לא יאשר מימון של ${formatPct(re.ltv * 100, 0)}. המקסימום ל${
-                      inputs.isFirstApartment ? "דירה יחידה הוא 75%" : "דירה נוספת הוא 50%"
-                    }.`}
-              </span>
-            </div>
-          )}
         </div>
 
         <SliderInput

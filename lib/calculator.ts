@@ -77,7 +77,7 @@ export interface Bound {
 export const BOUNDS: Record<NumericKey, Bound> = {
   equity: { min: 200_000, max: 3_000_000, step: 10_000 },
   years: { min: 5, max: 30, step: 1 },
-  propertyPrice: { min: 500_000, max: 5_000_000, step: 10_000 },
+  propertyPrice: { min: 300_000, max: 5_000_000, step: 10_000 },
   mortgageRate: { min: 1, max: 9, step: 0.05 },
   mortgageTerm: { min: 5, max: 30, step: 1 },
   rentalYield: { min: 1, max: 7, step: 0.05 },
@@ -128,6 +128,10 @@ export interface RealEstateSummary {
   ltv: number;
   maxLtv: number;
   ltvExceeded: boolean;
+  /** Highest price the bank would finance with this equity */
+  maxPrice: number;
+  /** The chosen price was above maxPrice and was lowered to it */
+  priceCapped: boolean;
   /** Equity doesn't even cover purchase tax + closing costs */
   equityShortfall: boolean;
   monthlyMortgagePayment: number;
@@ -237,14 +241,37 @@ export function spitzerPayment(principal: number, annualRatePct: number, years: 
   return (principal * i) / (1 - Math.pow(1 + i, -n));
 }
 
-/** Auto price = equity / 25% down, rounded to ₪10K and kept inside the slider bounds. */
-export function autoPropertyPrice(equity: number): number {
+/**
+ * The most expensive property the bank would finance with this equity.
+ * The equity must cover purchase tax + closing costs + the minimum down payment
+ * (25% for a single apartment, 50% for an additional one), so we find the
+ * largest price P with: equity − tax(P) − 2%·P ≥ (1 − maxLtv)·P.
+ * Rounded down to the slider step and kept inside the slider bounds.
+ */
+export function maxAffordablePrice(equity: number, isFirstApartment: boolean): number {
   const b = BOUNDS.propertyPrice;
-  return clamp(Math.round(equity / 0.25 / 10_000) * 10_000, b.min, b.max);
+  const maxLtv = isFirstApartment ? MAX_LTV_FIRST : MAX_LTV_ADDITIONAL;
+  const fits = (p: number) =>
+    equity - purchaseTax(p, isFirstApartment) - p * CLOSING_COSTS_RATE >= (1 - maxLtv) * p - 1e-6;
+  if (fits(b.max)) return b.max;
+  let lo = 0;
+  let hi = b.max;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid;
+    else hi = mid;
+  }
+  const stepped = Math.floor(lo / b.step) * b.step;
+  return clamp(stepped, b.min, b.max);
 }
 
+/**
+ * Price used in the simulation: the user's choice (or, in auto mode, the
+ * maximum), never above what the bank would finance.
+ */
 export function effectivePropertyPrice(inputs: SimInputs): number {
-  return inputs.autoPrice ? autoPropertyPrice(inputs.equity) : inputs.propertyPrice;
+  const cap = maxAffordablePrice(inputs.equity, inputs.isFirstApartment);
+  return inputs.autoPrice ? cap : Math.min(inputs.propertyPrice, cap);
 }
 
 /** After-tax value of an index-fund position with an inflation-indexed cost basis. */
@@ -273,6 +300,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     inflation,
   } = inputs;
 
+  const maxPrice = maxAffordablePrice(inputs.equity, isFirstApartment);
   const price = effectivePropertyPrice(inputs);
   const totalMonths = years * 12;
 
@@ -431,6 +459,8 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     ltv,
     maxLtv,
     ltvExceeded: ltv > maxLtv + 1e-9,
+    maxPrice,
+    priceCapped: !inputs.autoPrice && inputs.propertyPrice > maxPrice,
     equityShortfall,
     monthlyMortgagePayment: pmt,
     initialMonthlyRentGross: initialRentGross,
