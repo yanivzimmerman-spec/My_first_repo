@@ -98,6 +98,10 @@ export interface SimInputs {
   loanAmount: number;
   loanRate: number;
   loanTerm: number;
+  spLoanEnabled: boolean;
+  spLoanAmount: number;
+  spLoanRate: number;
+  spLoanTerm: number;
 }
 
 type NumericKey = {
@@ -128,6 +132,9 @@ export const BOUNDS: Record<NumericKey, Bound> = {
   loanAmount: { min: 10_000, max: 1_500_000, step: 10_000 },
   loanRate: { min: 2, max: 15, step: 0.1 },
   loanTerm: { min: 1, max: 20, step: 1 },
+  spLoanAmount: { min: 10_000, max: 1_500_000, step: 10_000 },
+  spLoanRate: { min: 2, max: 15, step: 0.1 },
+  spLoanTerm: { min: 1, max: 20, step: 1 },
 };
 
 export const DEFAULT_INPUTS: SimInputs = {
@@ -151,6 +158,10 @@ export const DEFAULT_INPUTS: SimInputs = {
   loanAmount: 200_000,
   loanRate: 7.5,
   loanTerm: 10,
+  spLoanEnabled: false,
+  spLoanAmount: 200_000,
+  spLoanRate: 6.5,
+  spLoanTerm: 10,
 };
 
 // ---------------------------------------------------------------------------
@@ -196,6 +207,10 @@ export interface RealEstateSummary {
   initialMonthlyRentNet: number;
   /** Mortgage + loan payments − net rent in month 1 (positive = out of pocket) */
   initialMonthlyGap: number;
+  /** Own money added per month in month 1 (same in both tracks when matching is on) */
+  initialMonthlyOwn: number;
+  /** Month-1 deposit into the apartment track's index fund (matching) */
+  initialSideDeposit: number;
   netYieldPct: number;
   totalCashInvested: number;
   outOfPocketContributions: number;
@@ -223,6 +238,12 @@ export interface RealEstateSummary {
 
 export interface SP500Summary {
   vehicle: SpVehicle;
+  loanPrincipal: number;
+  loanPayment: number;
+  loanInterestPaid: number;
+  loanRemaining: number;
+  /** Month-1 deposit into the fund (matching) */
+  initialDeposit: number;
   initialInvestment: number;
   monthlyContributionsTotal: number;
   totalCashInvested: number;
@@ -261,7 +282,7 @@ function safeNum(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-const BOOL_KEYS: BoolKey[] = ["autoPrice", "useBroker", "cashflowMatching", "loanEnabled"];
+const BOOL_KEYS: BoolKey[] = ["autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled"];
 
 /** Coerce arbitrary (possibly URL-sourced) input into a valid SimInputs. */
 export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApartment", unknown>>): SimInputs {
@@ -273,6 +294,7 @@ export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApa
   out.years = Math.round(out.years);
   out.mortgageTerm = Math.round(out.mortgageTerm);
   out.loanTerm = Math.round(out.loanTerm);
+  out.spLoanTerm = Math.round(out.spLoanTerm);
   const bool = (v: unknown, d: boolean) =>
     typeof v === "boolean" ? v : v === "1" || v === "true" ? true : v === "0" || v === "false" ? false : d;
   BOOL_KEYS.forEach((k) => {
@@ -434,12 +456,19 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const extraMonthly = inputs.loanRate / 100 / 12;
   const extraTermMonths = inputs.loanTerm * 12;
 
+  const spLoanPrincipal = inputs.spLoanEnabled ? inputs.spLoanAmount : 0;
+  const spLoanPmt = spitzerPayment(spLoanPrincipal, inputs.spLoanRate, inputs.spLoanTerm);
+  const spLoanMonthly = inputs.spLoanRate / 100 / 12;
+  const spLoanTermMonths = inputs.spLoanTerm * 12;
+
   // --- State -----------------------------------------------------------------
   let balance = loanAmount;
   let extraBalance = extraPrincipal;
-  let sp = equity;
-  let spBasis = equity;
-  let spContrib = 0;
+  let sp = equity + spLoanPrincipal; // borrowed money is invested on day one
+  let spBasis = equity + spLoanPrincipal;
+  let spContrib = 0; // own money added monthly to the S&P track
+  let spLoanBalance = spLoanPrincipal;
+  let spLoanInterest = 0;
   let side = unusedCash; // RE-track index fund for rent surpluses / unused cash
   let sideBasis = unusedCash;
   let idleCash = 0;
@@ -453,6 +482,9 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   let initialRentGross = 0;
   let initialRentNet = 0;
   let initialGap = 0;
+  let initialOwn = 0;
+  let initialSideDeposit = 0;
+  let initialSpDeposit = 0;
 
   const snapshot = (month: number) => {
     const t = month / 12;
@@ -491,7 +523,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
 
     const realEstate =
       propertyValue - sellCosts - balance - extraBalance - shevach - reSurtax + (side - sideTax) + idleCash;
-    const sp500 = sp - spTax - spSurtax;
+    const sp500 = sp - spTax - spSurtax - spLoanBalance;
     return {
       point: {
         year: Math.round(t),
@@ -538,6 +570,16 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
       extraInterest += interest;
     }
 
+    // 2b. S&P loan (Spitzer)
+    let spLoanPayment = 0;
+    if (spLoanBalance > 0 && m <= spLoanTermMonths) {
+      const interest = spLoanBalance * spLoanMonthly;
+      spLoanPayment = Math.min(spLoanPmt, spLoanBalance + interest);
+      spLoanBalance = spLoanBalance + interest - spLoanPayment;
+      if (spLoanBalance < 0.005) spLoanBalance = 0;
+      spLoanInterest += interest;
+    }
+
     // 3. Rent: grows yearly; one vacant month a year; tax; landlord costs
     const rentGross = Math.max(0, ((price * rentalYield) / 100 / 12) * Math.pow(1 + rentGrowth / 100, yearIdx));
     const collected = rentGross * (1 - VACANCY_MONTHS_PER_YEAR / 12);
@@ -556,28 +598,38 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     spBasis *= 1 + basisMonthly;
     sideBasis *= 1 + basisMonthly;
 
-    // 5. Cash-flow matching
-    const gap = payment + extraPayment - rentNet;
+    // 5. Cash flow. Each track has its own monthly outflow:
+    //    apartment = mortgage + loan − net rent (negative = surplus); S&P = its loan payment.
+    //    With matching, both investors put in the same own money P = max(both outflows);
+    //    whoever pays less invests the difference in an index fund.
+    const reOut = payment + extraPayment - rentNet;
+    const spOut = spLoanPayment;
+    let own: number;
+    let sideDeposit = 0;
+    let spDeposit = 0;
+    if (cashflowMatching) {
+      own = Math.max(reOut, spOut);
+      sideDeposit = own - reOut;
+      spDeposit = own - spOut;
+      side += sideDeposit;
+      sideBasis += sideDeposit;
+      sp += spDeposit;
+      spBasis += spDeposit;
+      outOfPocket += own;
+      spContrib += own;
+    } else {
+      own = Math.max(0, reOut);
+      if (reOut > 0) outOfPocket += reOut;
+      else idleCash += -reOut;
+      spContrib += spOut;
+    }
     if (m === 1) {
       initialRentGross = rentGross;
       initialRentNet = rentNet;
-      initialGap = gap;
-    }
-    if (gap > 0) {
-      outOfPocket += gap;
-      if (cashflowMatching) {
-        sp += gap;
-        spBasis += gap;
-        spContrib += gap;
-      }
-    } else if (gap < 0) {
-      const surplus = -gap;
-      if (cashflowMatching) {
-        side += surplus;
-        sideBasis += surplus;
-      } else {
-        idleCash += surplus;
-      }
+      initialGap = reOut;
+      initialOwn = cashflowMatching ? own : Math.max(0, reOut);
+      initialSideDeposit = sideDeposit;
+      initialSpDeposit = spDeposit;
     }
 
     if (m % 12 === 0) {
@@ -611,6 +663,8 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     initialMonthlyRentGross: initialRentGross,
     initialMonthlyRentNet: initialRentNet,
     initialMonthlyGap: initialGap,
+    initialMonthlyOwn: initialOwn,
+    initialSideDeposit,
     netYieldPct: price > 0 ? ((initialRentNet * 12) / price) * 100 : 0,
     totalCashInvested: reCash,
     outOfPocketContributions: outOfPocket,
@@ -638,11 +692,16 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const spCash = equity + spContrib;
   const sp500: SP500Summary = {
     vehicle: spVehicle,
+    loanPrincipal: spLoanPrincipal,
+    loanPayment: spLoanPmt,
+    loanInterestPaid: spLoanInterest,
+    loanRemaining: spLoanBalance,
+    initialDeposit: initialSpDeposit,
     initialInvestment: equity,
     monthlyContributionsTotal: spContrib,
     totalCashInvested: spCash,
     grossValue: sp,
-    grossGain: sp - spCash,
+    grossGain: sp - spLoanBalance - spCash,
     capitalGainsTax: last.spTax,
     surtax: last.spSurtax,
     netWorth: last.point.sp500,
@@ -663,4 +722,27 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   }
 
   return { inputs, points, realEstate, sp500, winner, difference, crossovers };
+}
+
+/**
+ * The yearly apartment-price growth at which both tracks end equal, all else
+ * unchanged. The S&P result doesn't depend on property prices, and the
+ * apartment result rises with them, so a bisection finds it.
+ * Returns null when the answer is outside the slider range (−2%…10%).
+ */
+export function breakEvenAppreciation(inputs: SimInputs): { value: number | null; below: boolean } {
+  const target = simulate(inputs).sp500.netWorth;
+  const reAt = (a: number) => simulate({ ...inputs, appreciation: a }).realEstate.netWorth;
+  const LO = BOUNDS.appreciation.min;
+  const HI = BOUNDS.appreciation.max;
+  if (reAt(LO) >= target) return { value: null, below: true }; // apartment wins even at −2%
+  if (reAt(HI) < target) return { value: null, below: false }; // S&P wins even at the maximum
+  let lo = LO;
+  let hi = HI;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (reAt(mid) >= target) hi = mid;
+    else lo = mid;
+  }
+  return { value: hi, below: false };
 }

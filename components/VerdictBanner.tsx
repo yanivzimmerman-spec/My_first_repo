@@ -1,7 +1,13 @@
 "use client";
 
 import type { SimResult } from "@/lib/calculator";
-import { formatILS, formatPct } from "@/lib/format";
+import { formatCompactILS, formatILS, formatPct } from "@/lib/format";
+import { topReasons } from "@/lib/insights";
+
+export interface BreakEven {
+  value: number | null;
+  below: boolean;
+}
 
 export function verdictText(r: SimResult): string {
   const y = r.inputs.years;
@@ -50,12 +56,23 @@ function Bar({
 }
 
 /** The answer: one sentence, two bars, three facts. */
-export default function VerdictBanner({ result }: { result: SimResult }) {
+function breakEvenText(r: SimResult, be: BreakEven): string {
+  const assumed = formatPct(r.inputs.appreciation, 1);
+  if (be.value === null) {
+    return be.below
+      ? "הדירה מנצחת גם אם מחירי הדירות לא יעלו בכלל, ואפילו ירדו 2% בשנה."
+      : "גם אם מחירי הדירות יעלו ב-10% בשנה, ה-S&P עדיין ינצח.";
+  }
+  const v = formatPct(be.value, 1);
+  return r.winner === "realEstate"
+    ? `הדירה מנצחת כל עוד המחירים עולים ביותר מ-${v} בשנה. הנחתם ${assumed}.`
+    : `הדירה תנצח רק אם המחירים יעלו ביותר מ-${v} בשנה. הנחתם ${assumed}.`;
+}
+
+export default function VerdictBanner({ result, breakEven }: { result: SimResult; breakEven: BreakEven }) {
   const r = result;
   const max = Math.max(r.realEstate.netWorth, r.sp500.netWorth);
   const winInk = r.winner === "realEstate" ? "#4338CA" : r.winner === "sp500" ? "#047857" : "#0F172A";
-  const cross = r.crossovers[r.crossovers.length - 1];
-  const sameCash = Math.abs(r.realEstate.totalCashInvested - r.sp500.totalCashInvested) < 1;
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7" aria-live="polite">
@@ -66,9 +83,9 @@ export default function VerdictBanner({ result }: { result: SimResult }) {
         ) : (
           <>
             בטווח של {r.inputs.years} שנה,{" "}
-            <span style={{ color: winInk }}>{r.winner === "realEstate" ? "הדירה" : "ה-S&P 500"}</span>{" "}
+            <span className="whitespace-nowrap" style={{ color: winInk }}>{r.winner === "realEstate" ? "הדירה" : "ה-S&P 500"}</span>{" "}
             {r.winner === "realEstate" ? "משאירה" : "משאיר"} לכם{" "}
-            <span style={{ color: winInk }}>{formatILS(Math.round(r.difference / 1000) * 1000)}</span> יותר
+            <span className="whitespace-nowrap" style={{ color: winInk }}>{formatCompactILS(r.difference)}</span> יותר
           </>
         )}
       </h2>
@@ -95,41 +112,24 @@ export default function VerdictBanner({ result }: { result: SimResult }) {
         />
       </div>
 
-      <dl className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 text-[13px] sm:grid-cols-3">
-        <div>
-          <dt className="text-slate-500">{sameCash ? "השקעתם בכל מסלול" : "השקעתם (דירה / S&P)"}</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
-            {sameCash ? (
-              formatILS(r.realEstate.totalCashInvested)
-            ) : (
-              <>
-                {formatILS(r.realEstate.totalCashInvested)} / {formatILS(r.sp500.totalCashInvested)}
-              </>
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">מסים ששולמו (דירה / S&P)</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
-            {formatILS(
-              r.realEstate.purchaseTax +
-                r.realEstate.totalRentTax +
-                r.realEstate.shevachTax +
-                r.realEstate.sideFundTax +
-                r.realEstate.surtax,
-            )}{" "}
-            / {formatILS(r.sp500.capitalGainsTax + r.sp500.surtax)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">נקודת המהפך</dt>
-          <dd className="mt-0.5 font-semibold text-slate-900">
-            {cross
-              ? `שנה ${cross.year}: ${cross.leader === "realEstate" ? "הדירה עוקפת" : "ה-S&P עוקף"}`
-              : "אין, מוביל אחד לאורך כל הדרך"}
-          </dd>
-        </div>
-      </dl>
+      <div className="mt-6 border-t border-slate-100 pt-5">
+        <h3 className="text-[13px] font-semibold text-slate-500">למה זה יצא ככה?</h3>
+        <ul className="mt-3 space-y-2.5">
+          {topReasons(r).map((reason, i) => (
+            <li key={i} className="flex gap-2.5 text-[14px] leading-relaxed text-slate-700">
+              <span
+                className="mt-[7px] h-2 w-2 shrink-0 rounded-full"
+                style={{ background: reason.favors === "realEstate" ? "#4F46E5" : "#10B981" }}
+                aria-label={reason.favors === "realEstate" ? "לטובת הדירה" : "לטובת ה-S&P"}
+              />
+              <span>{reason.text(formatCompactILS)}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 rounded-lg bg-slate-50 px-3.5 py-2.5 text-[14px] font-medium leading-relaxed text-slate-800">
+          {breakEvenText(r, breakEven)}
+        </p>
+      </div>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 /* Sanity + fuzz tests for lib/calculator.ts — run with `npm test`. */
 import {
   simulate, purchaseTax, spitzerPayment, sanitizeInputs, maxAffordablePrice, buyingCosts, sellingCostRate,
-  monthlyRentTax, surtax, BOUNDS, DEFAULT_INPUTS,
+  monthlyRentTax, surtax, breakEvenAppreciation, BOUNDS, DEFAULT_INPUTS,
   type SimInputs,
 } from "../lib/calculator.ts";
 
@@ -86,6 +86,22 @@ ok(withLoan.realEstate.extraLoanPayment > 0 && near(withLoan.realEstate.initialM
 ok(withLoan.realEstate.extraLoanRemaining === 0, "10-year loan repaid within 15 years");
 ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested, 1), "with loan + matching, both tracks still invest the same own cash");
 
+// Loan to invest in the S&P
+const spl = simulate({ ...DEFAULT_INPUTS, spLoanEnabled: true, spLoanAmount: 300_000 });
+ok(near(spl.points[0].sp500, DEFAULT_INPUTS.equity, 0.01), "S&P loan: year 0 net worth = own equity (loan offsets)");
+ok(spl.sp500.grossValue > simulate(DEFAULT_INPUTS).sp500.grossValue, "S&P loan: portfolio bigger");
+ok(near(spl.realEstate.totalCashInvested, spl.sp500.totalCashInvested, 1), "S&P loan + matching: equal own cash in both tracks");
+const spl2 = simulate({ ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 1_000_000, spLoanEnabled: true });
+ok(spl2.realEstate.initialSideDeposit > 0, "when the S&P loan costs more than the apartment, the apartment track invests the difference");
+
+// Break-even appreciation
+const be = breakEvenAppreciation(DEFAULT_INPUTS);
+ok(be.value !== null, "break-even exists for defaults");
+if (be.value !== null) {
+  const atBe = simulate({ ...DEFAULT_INPUTS, appreciation: be.value });
+  ok(Math.abs(atBe.realEstate.netWorth - atBe.sp500.netWorth) < 50, `at ${be.value.toFixed(2)}% appreciation both tracks end equal`);
+}
+
 // Sole-apartment exemption ceiling & foreign ETF indexation
 const big = simulate({ ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 5_000_000, years: 15 });
 ok(big.realEstate.shevachPartial && big.realEstate.shevachTax > 0, "single apt sold above ₪5.008M ceiling (indexed) → partial מס שבח");
@@ -119,6 +135,17 @@ for (let i = 0; i < 3000; i++) {
 check(sanitizeInputs({ equity: "abc", years: NaN, propertyPrice: Infinity, mortgageRate: -5, spReturn: "1e9" } as never));
 check({} as Partial<SimInputs>);
 ok(bad === 0, "fuzz: 3000+ random/extreme/garbage inputs, all finite, LTV never over the bank limit");
+
+// "Why it came out this way": both gains + the biggest cost, winner's gain first
+{
+  const { topReasons } = await import("../lib/insights.ts");
+  const d = simulate(DEFAULT_INPUTS);
+  const rs = topReasons(d);
+  ok(rs.length === 3, "three reasons");
+  ok(rs[0].favors === (d.winner === "sp500" ? "sp500" : "realEstate"), "winner's gain listed first");
+  const txt = rs.map((x) => x.text((n) => String(Math.round(n)))).join(" ");
+  ok(!/NaN|undefined|Infinity/.test(txt), "reasons text has no broken numbers");
+}
 
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll tests passed");

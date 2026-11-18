@@ -38,7 +38,11 @@ The full source review is in a local research report; each rule below was checke
 - **Rent tax**: exempt up to ₪5,654/month (frozen through 2027, CPI-linked after). Between the ceiling and twice the ceiling, the cheaper of the tapered exemption (remainder at a 31% marginal rate) and 10% of gross rent applies. Above twice the ceiling, 10% applies.
 - **S&P 500**: (1 + return) × (1 − fee) − 1, minus dividend withholding drag (0.25%/yr Israeli tracking fund, 0.19%/yr Irish ETF). At sale, 25% on the gain: CPI-indexed basis for an Israeli fund, USD-indexed for an Irish ETF (assumed flat USD/ILS, so the nominal gain is taxed).
 - **Surtax (מס יסף)**: 5% (3% + 2% on capital income) on capital gains above ₪721,560 in the sale year, assuming no other income that year. Apartment sales count only if non-exempt and above ₪5,382,285.
-- **Cash-flow matching** (on by default): when the mortgage and loan payments exceed net rent, the S&P track invests the difference. When rent exceeds them, the surplus goes into an index fund inside the real-estate track.
+- **Optional add-ons** (the user switches each on or off):
+  - *Invest the monthly difference* (on by default): each month both tracks put in the same own money, the larger of the two tracks' outflows (apartment: mortgage + loan − net rent; S&P: its loan payment). Whichever track pays less invests the difference in an index fund. Off: the S&P track gets only the initial equity, and rent surpluses stay as cash.
+  - *Loan for the apartment*: described above.
+  - *Loan to invest in the S&P* (default 6.5%, 10 years): borrowed money is invested on day one; payments come out of pocket and the remaining balance is subtracted at sale. Interest deductibility against capital gains is not modelled (conservative).
+- **Explanations**: the answer card shows three plain-language reasons (both tracks' gains plus the biggest cost) and the break-even yearly price growth at which both tracks end equal.
 - **Not modelled**: notional depreciation the Tax Authority deducts on rented apartments (under legal challenge), the household-level rent ceiling across several properties, the ₪90K deduction for owners who rent their own home, the track mix of a real mortgage, and US estate tax on US-domiciled ETFs.
 
 This is a simulation, not investment advice.

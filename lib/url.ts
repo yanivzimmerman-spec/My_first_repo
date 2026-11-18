@@ -22,6 +22,10 @@ const KEYS: Record<keyof SimInputs, string> = {
   loanAmount: "la",
   loanRate: "lr",
   loanTerm: "lt",
+  spLoanEnabled: "sl",
+  spLoanAmount: "sla",
+  spLoanRate: "slr",
+  spLoanTerm: "slt",
 };
 
 export function inputsToQuery(inputs: SimInputs): string {

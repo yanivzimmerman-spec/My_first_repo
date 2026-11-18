@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Share2, Check, RotateCcw } from "lucide-react";
-import { DEFAULT_INPUTS, simulate, type SimInputs } from "@/lib/calculator";
+import { DEFAULT_INPUTS, breakEvenAppreciation, simulate, type SimInputs } from "@/lib/calculator";
 import { PRESETS } from "@/lib/presets";
 import { inputsToQuery, queryToInputs } from "@/lib/url";
 import { formatCompactILS, formatILS } from "@/lib/format";
@@ -10,6 +10,7 @@ import ControlPanel from "./ControlPanel";
 import VerdictBanner, { verdictText } from "./VerdictBanner";
 import GrowthChart from "./GrowthChart";
 import Breakdown from "./Breakdown";
+import StoryCard from "./StoryCard";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
@@ -59,6 +60,7 @@ export default function Simulator() {
   }, [inputs, hydrated]);
 
   const result = useMemo(() => simulate(inputs), [inputs]);
+  const breakEven = useMemo(() => breakEvenAppreciation(inputs), [inputs]);
 
   const set = useCallback(<K extends keyof SimInputs>(key: K, value: SimInputs[K]) => {
     setInputs((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
@@ -71,7 +73,7 @@ export default function Simulator() {
       `נדל״ן מול סנופי — ${verdictText(result)}`,
       `🏠 דירה להשקעה: ${formatILS(result.realEstate.netWorth)} נטו`,
       `📈 S&P 500: ${formatILS(result.sp500.netWorth)} נטו`,
-      `(הון עצמי ${formatILS(inputs.equity)}, ${{ single: "דירה יחידה", upgrader: "משפרי דיור", additional: "דירה נוספת" }[inputs.apartmentType]}${inputs.loanEnabled ? `, הלוואה ${formatILS(inputs.loanAmount)}` : ""}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
+      `(הון עצמי ${formatILS(inputs.equity)}, ${{ single: "דירה יחידה", upgrader: "משפרי דיור", additional: "דירה נוספת" }[inputs.apartmentType]}${inputs.loanEnabled ? `, הלוואה לדירה ${formatILS(inputs.loanAmount)}` : ""}${inputs.spLoanEnabled ? `, הלוואה להשקעה ${formatILS(inputs.spLoanAmount)}` : ""}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
       ...(STANDALONE ? [] : [url]),
     ]
       .join("\n")
@@ -151,17 +153,21 @@ export default function Simulator() {
         Layout: phone = answer → inputs → chart → details (one column).
         Desktop (RTL) = inputs in a sticky right column, results on the left.
       */}
-      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:gap-8">
+      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_1fr] lg:items-start lg:gap-8">
         <div className="min-w-0 lg:col-start-2 lg:row-start-1">
-          <VerdictBanner result={result} />
+          <VerdictBanner result={result} breakEven={breakEven} />
         </div>
 
         <aside
           aria-label="הנתונים שלכם"
-          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
+          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-4 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
         >
           <ControlPanel inputs={inputs} result={result} set={set} />
         </aside>
+
+        <div className="min-w-0 lg:col-start-2">
+          <StoryCard result={result} />
+        </div>
 
         <div className="min-w-0 lg:col-start-2">
           <GrowthChart result={result} />

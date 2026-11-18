@@ -42,11 +42,14 @@ export default function Breakdown({ result }: { result: SimResult }) {
           re: re.outOfPocketContributions,
           sp: sp.monthlyContributionsTotal,
           note: matching
-            ? loan
-              ? "החזרי משכנתא והלוואה פחות שכירות נטו"
-              : "החזר משכנתא פחות שכירות נטו"
-            : "ההשלמה כבויה, ה-S&P לא מקבל הפקדות",
+            ? "אותו סכום בשני המסלולים"
+            : sp.loanPrincipal > 0
+              ? "ההשקעה החודשית כבויה; ב-S&P רק החזרי ההלוואה"
+              : "ההשקעה החודשית כבויה, ה-S&P לא מקבל הפקדות",
         },
+        ...(sp.loanPrincipal > 0
+          ? [{ label: "הלוואה להשקעה", re: null, sp: sp.loanPrincipal, note: "כסף מושאל, לא נספר כהשקעה שלכם" } as Line]
+          : []),
         { label: "סך מזומן שהושקע", re: re.totalCashInvested, sp: sp.totalCashInvested, strong: true },
       ],
     },
@@ -62,8 +65,15 @@ export default function Breakdown({ result }: { result: SimResult }) {
           note: result.inputs.useBroker ? "תיווך, עו״ד, מע״מ, שמאי, יועץ" : "עו״ד, מע״מ, שמאי, יועץ",
         },
         { label: "ריבית משכנתא ששולמה", re: re.totalInterestPaid, sp: null, negative: true, note: "כלולה בהחזרים החודשיים" },
-        ...(loan
-          ? [{ label: "ריבית על ההלוואה", re: re.extraLoanInterestPaid, sp: null, negative: true } as Line]
+        ...(loan || sp.loanPrincipal > 0
+          ? [
+              {
+                label: "ריבית על הלוואות",
+                re: loan ? re.extraLoanInterestPaid : null,
+                sp: sp.loanPrincipal > 0 ? sp.loanInterestPaid : null,
+                negative: true,
+              } as Line,
+            ]
           : []),
         { label: "שכר דירה (ברוטו)", re: re.totalRentGross, sp: null },
         { label: "חודשים פנויים", re: re.totalVacancyLoss, sp: null, negative: true, note: "חודש אחד בשנה" },
@@ -88,7 +98,16 @@ export default function Breakdown({ result }: { result: SimResult }) {
       lines: [
         { label: "שווי הנכס / תיק ההשקעות", re: re.finalPropertyValue, sp: sp.grossValue },
         { label: "יתרת משכנתא שנותרה", re: re.remainingMortgage, sp: null, negative: true },
-        ...(loan ? [{ label: "יתרת ההלוואה שנותרה", re: re.extraLoanRemaining, sp: null, negative: true } as Line] : []),
+        ...(loan || sp.loanPrincipal > 0
+          ? [
+              {
+                label: "יתרת הלוואה שנותרה",
+                re: loan ? re.extraLoanRemaining : null,
+                sp: sp.loanPrincipal > 0 ? sp.loanRemaining : null,
+                negative: true,
+              } as Line,
+            ]
+          : []),
         ...(re.sideFundValue > 0.5
           ? [{ label: "תיק מדד מעודפי שכירות", re: re.sideFundValue, sp: null, note: "עודפים שהושקעו במדד" } as Line]
           : []),

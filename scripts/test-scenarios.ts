@@ -68,6 +68,15 @@ function spitzerBalance(P: number, ratePct: number, years: number, k: number): n
   return P * Math.pow(1 + i, k) - (pmt * (Math.pow(1 + i, k) - 1)) / i;
 }
 
+/** Total S&P loan payments made within the horizon. */
+function sumSpLoanPayments(inp: SimInputs, months: number): number {
+  if (!inp.spLoanEnabled) return 0;
+  const pmt = spitzerPayment(inp.spLoanAmount, inp.spLoanRate, inp.spLoanTerm);
+  const k = Math.min(months, inp.spLoanTerm * 12);
+  // last payment may be slightly smaller; principal identity: paid = principal − balance + interest
+  return pmt * k;
+}
+
 function checkScenario(inp: SimInputs, r: SimResult) {
   const re = r.realEstate;
   const sp = r.sp500;
@@ -116,6 +125,23 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   const expLoanPmt = inp.loanEnabled ? spitzerPayment(inp.loanAmount, inp.loanRate, inp.loanTerm) : 0;
   check(near(re.initialMonthlyGap, expPmt + expLoanPmt - expNet, 0.01), "month-1 gap = mortgage + loan − net rent", ctx);
 
+  // 4c. S&P loan balance (closed form) and month-1 matching deposits
+  if (inp.spLoanEnabled) {
+    const ks = Math.min(months, inp.spLoanTerm * 12);
+    check(near(sp.loanRemaining, spitzerBalance(inp.spLoanAmount, inp.spLoanRate, inp.spLoanTerm, ks), 2), "S&P loan balance (closed form)", ctx);
+  } else {
+    check(sp.loanPrincipal === 0 && sp.loanRemaining === 0, "no S&P loan when disabled", ctx);
+  }
+  const spOut = inp.spLoanEnabled ? spitzerPayment(inp.spLoanAmount, inp.spLoanRate, inp.spLoanTerm) : 0;
+  const reOut = expPmt + expLoanPmt - expNet;
+  if (inp.cashflowMatching) {
+    const own = Math.max(reOut, spOut);
+    check(near(re.initialMonthlyOwn, own, 0.01), "month-1 own money = max(apartment outflow, S&P loan payment)", ctx);
+    check(near(sp.initialDeposit, own - spOut, 0.01) && near(re.initialSideDeposit, own - reOut, 0.01), "month-1 matching deposits", ctx);
+  } else {
+    check(sp.initialDeposit === 0 && re.initialSideDeposit === 0, "no matching → no deposits", ctx);
+  }
+
   // 5. Year 0 values
   const p0 = r.points[0];
   const re0 = inp.equity - re.purchaseTax - re.closingCosts - re.propertyPrice * sellingCostRate(inp.useBroker);
@@ -125,7 +151,7 @@ function checkScenario(inp: SimInputs, r: SimResult) {
 
   // 6. Fairness: with matching, both tracks invest the same own cash
   if (inp.cashflowMatching) check(near(re.totalCashInvested, sp.totalCashInvested, 1), "matching → equal cash invested", ctx);
-  else check(sp.monthlyContributionsTotal === 0, "no matching → no S&P contributions", ctx);
+  else if (!inp.spLoanEnabled) check(sp.monthlyContributionsTotal === 0, "no matching → no S&P contributions", ctx);
 
   // 7. Taxes
   check(re.totalRentTax <= 0.1 * (re.totalRentGross - re.totalVacancyLoss) + 0.01, "rent tax ≤ 10% of rent collected", ctx);
@@ -139,15 +165,17 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   }
   const nominalGain = Math.max(0, re.finalPropertyValue - re.sellingCosts - re.propertyPrice - re.purchaseTax - re.closingCosts);
   check(re.shevachTax <= CAPITAL_GAINS_TAX_RATE * nominalGain + 0.01, "מס שבח ≤ 25% of nominal gain", ctx);
-  check(sp.capitalGainsTax <= CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - sp.totalCashInvested) + 0.01 || inp.spVehicle === "irish", "S&P tax ≤ 25% of nominal gain (Israeli fund)", ctx);
+  // Cost basis = own money + borrowed money invested + matching deposits
+  const spBasisNominal = inp.equity + sp.loanPrincipal + (inp.cashflowMatching ? sp.monthlyContributionsTotal - sumSpLoanPayments(inp, months) : 0);
+  check(sp.capitalGainsTax <= CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - spBasisNominal) + 0.01 || inp.spVehicle === "irish", "S&P tax ≤ 25% of nominal gain (Israeli fund)", ctx);
   if (inp.spVehicle === "irish") {
-    check(near(sp.capitalGainsTax, CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - sp.totalCashInvested), 1), "Irish ETF: 25% of nominal gain", ctx);
+    check(near(sp.capitalGainsTax, CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - spBasisNominal), 1), "Irish ETF: 25% of nominal gain", ctx);
   }
   const thr = SURTAX_THRESHOLD * Math.pow(1 + inp.inflation / 100, Math.max(0, inp.years - 1));
   if (sp.capitalGainsTax / CAPITAL_GAINS_TAX_RATE <= thr) check(sp.surtax === 0, "no S&P surtax below threshold", ctx);
 
   // 8. S&P without matching: closed form
-  if (!inp.cashflowMatching) {
+  if (!inp.cashflowMatching && !inp.spLoanEnabled) {
     const drag = inp.spVehicle === "israeli" ? 0.0025 : 0.0019;
     const annual = (1 + inp.spReturn / 100) * (1 - inp.spFee / 100) - 1 - drag;
     const expected = inp.equity * Math.pow(1 + annual, inp.years);
@@ -159,7 +187,7 @@ function checkScenario(inp: SimInputs, r: SimResult) {
     re.finalPropertyValue - re.sellingCosts - re.remainingMortgage - re.extraLoanRemaining - re.shevachTax - re.surtax +
     re.sideFundValue - re.sideFundTax + re.idleCash;
   check(near(reNet, re.netWorth, 1), "apartment net worth identity", ctx);
-  check(near(sp.grossValue - sp.capitalGainsTax - sp.surtax, sp.netWorth, 1), "S&P net worth identity", ctx);
+  check(near(sp.grossValue - sp.capitalGainsTax - sp.surtax - sp.loanRemaining, sp.netWorth, 1), "S&P net worth identity", ctx);
 
   // 10. Winner / crossovers consistent
   const d = re.netWorth - sp.netWorth;
@@ -178,6 +206,7 @@ for (const apartmentType of TYPES)
     for (const spVehicle of VEHICLES)
       for (const cashflowMatching of BOOLS)
         for (const loanEnabled of BOOLS)
+         for (const spLoanEnabled of BOOLS)
           for (const autoPrice of BOOLS)
             for (const equity of EQUITY)
               for (const years of YEARS)
@@ -190,6 +219,7 @@ for (const apartmentType of TYPES)
                     spVehicle,
                     cashflowMatching,
                     loanEnabled,
+                    spLoanEnabled,
                     autoPrice,
                     equity,
                     years,
