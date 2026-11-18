@@ -72,7 +72,7 @@ export default function VerdictBanner({ result }: { result: SimResult }) {
           </>
         )}
       </h2>
-      <p className="mt-1 text-[14px] text-slate-500">שווי נטו ביום המכירה, אחרי כל המסים וסילוק המשכנתא</p>
+      <p className="mt-1 text-[14px] text-slate-500">שווי נטו ביום המכירה, אחרי כל המסים וסילוק המשכנתא{r.realEstate.extraLoanPrincipal > 0 ? " וההלוואה" : ""}</p>
 
       <div className="mt-6 space-y-5">
         <Bar
@@ -111,8 +111,14 @@ export default function VerdictBanner({ result }: { result: SimResult }) {
         <div>
           <dt className="text-slate-500">מסים ששולמו (דירה / S&P)</dt>
           <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
-            {formatILS(r.realEstate.purchaseTax + r.realEstate.totalRentTax + r.realEstate.shevachTax + r.realEstate.sideFundTax)} /{" "}
-            {formatILS(r.sp500.capitalGainsTax)}
+            {formatILS(
+              r.realEstate.purchaseTax +
+                r.realEstate.totalRentTax +
+                r.realEstate.shevachTax +
+                r.realEstate.sideFundTax +
+                r.realEstate.surtax,
+            )}{" "}
+            / {formatILS(r.sp500.capitalGainsTax + r.sp500.surtax)}
           </dd>
         </div>
         <div>

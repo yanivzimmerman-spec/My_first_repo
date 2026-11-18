@@ -71,7 +71,7 @@ export default function Simulator() {
       `נדל״ן מול סנופי — ${verdictText(result)}`,
       `🏠 דירה להשקעה: ${formatILS(result.realEstate.netWorth)} נטו`,
       `📈 S&P 500: ${formatILS(result.sp500.netWorth)} נטו`,
-      `(הון עצמי ${formatILS(inputs.equity)}, ${inputs.isFirstApartment ? "דירה יחידה" : "דירה נוספת"}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
+      `(הון עצמי ${formatILS(inputs.equity)}, ${{ single: "דירה יחידה", upgrader: "משפרי דיור", additional: "דירה נוספת" }[inputs.apartmentType]}${inputs.loanEnabled ? `, הלוואה ${formatILS(inputs.loanAmount)}` : ""}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
       ...(STANDALONE ? [] : [url]),
     ]
       .join("\n")

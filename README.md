@@ -22,13 +22,23 @@ npm run build
 | `components/` | Control panel, verdict, Recharts chart, breakdown table |
 | `scripts/test-calculator.ts` | Sanity tests + 3,000-case NaN/Infinity fuzz |
 
-## Model assumptions
+## Model assumptions (Israeli rules as of late 2026)
 
-- **Purchase tax**: 2025 brackets. Single apartment: 0% up to ₪1,978,745, then 3.5% / 5% / 8% / 10%. Additional apartment: 8% from the first shekel, 10% above ₪6,055,070. Closing costs are a flat 2%.
-- **Mortgage**: Spitzer amortization on price − (equity − purchase tax − closing costs). The term is adjustable (default 25 years).
-- **Bank financing limit (enforced)**: the property price is capped so the mortgage never exceeds the Bank of Israel limit, 75% for a single apartment and 50% for an additional one. Equity must also cover purchase tax and closing costs, so ₪350K buys an additional apartment of at most ₪580K. The "max price" switch buys exactly that maximum.
-- **Rent**: net yield × current property value, re-priced every year. No tax up to ₪5,654/month (CPI-linked). Above that, a flat 10% on the gross rent.
-- **Cash-flow matching** (on by default): when the mortgage payment exceeds net rent, the S&P track invests the difference. When rent exceeds the payment, the surplus goes into an index fund inside the real-estate track. Both tracks therefore put in the same total cash.
-- **Liquidation**: every yearly point is a full after-tax sale. Selling costs are 1%. מס שבח is 25% on the real gain for an additional apartment; a single apartment is exempt after 18 months. The S&P track pays 25% on the real gain, with the cost basis indexed to inflation (default 2.5%).
+The full source review is in a local research report; each rule below was checked against 2025-2026 sources.
+
+- **Apartment type**
+  - *Single apartment*: single-apartment purchase-tax brackets (0% to ₪1,978,745, then 3.5% / 5% / 8% / 10%; amounts frozen until 15.1.2028), 75% max financing, exempt from מס שבח after 18 months up to a ₪5,008,000 sale price. Above the ceiling, the matching share of the gain is taxed at 25%.
+  - *Upgrader*: single-apartment purchase tax (assumes the old home is sold within 24 months), 70% max financing, exempt on sale.
+  - *Additional apartment*: 8% purchase tax from the first shekel, 10% above ₪6,055,070 (a temporary order for purchases up to 10.2.2027), 50% max financing, 25% מס שבח on the real gain.
+- **Bank limit (enforced)**: the price is capped so cash covers the down payment, purchase tax and buying costs. The payment-to-income limit (50%) is not modelled because there is no income input.
+- **Transaction costs**: broker 2% (optional) plus lawyer 0.5%, each plus 18% VAT, on both purchase and sale. Buying also adds ₪10,000 fixed (appraiser, mortgage advisor, bank fees).
+- **Mortgage**: Spitzer, one average rate (default 4.8%), term up to 30 years.
+- **Down-payment loan (optional)**: a personal / "any purpose" loan (default 7.5%, 10 years) added to the cash for the purchase. Its payments count as out-of-pocket, so with matching on the S&P track invests the same amount. The remaining balance is subtracted at sale. Banks check where the equity comes from, and since February 2026 all housing credit counts toward the 50% payment-to-income limit.
+- **Rent**: the yield is gross on the purchase price; rent grows by its own rate (default 3%/yr). One vacant month a year, 8% maintenance and ₪150/month insurance are deducted.
+- **Rent tax**: exempt up to ₪5,654/month (frozen through 2027, CPI-linked after). Between the ceiling and twice the ceiling, the cheaper of the tapered exemption (remainder at a 31% marginal rate) and 10% of gross rent applies. Above twice the ceiling, 10% applies.
+- **S&P 500**: (1 + return) × (1 − fee) − 1, minus dividend withholding drag (0.25%/yr Israeli tracking fund, 0.19%/yr Irish ETF). At sale, 25% on the gain: CPI-indexed basis for an Israeli fund, USD-indexed for an Irish ETF (assumed flat USD/ILS, so the nominal gain is taxed).
+- **Surtax (מס יסף)**: 5% (3% + 2% on capital income) on capital gains above ₪721,560 in the sale year, assuming no other income that year. Apartment sales count only if non-exempt and above ₪5,382,285.
+- **Cash-flow matching** (on by default): when the mortgage and loan payments exceed net rent, the S&P track invests the difference. When rent exceeds them, the surplus goes into an index fund inside the real-estate track.
+- **Not modelled**: notional depreciation the Tax Authority deducts on rented apartments (under legal challenge), the household-level rent ceiling across several properties, the ₪90K deduction for owners who rent their own home, the track mix of a real mortgage, and US estate tax on US-domiciled ETFs.
 
 This is a simulation, not investment advice.

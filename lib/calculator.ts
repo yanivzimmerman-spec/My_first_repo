@@ -7,14 +7,18 @@
  * have in my pocket?"
  *
  * All rates in SimInputs are given in PERCENT (e.g. 4.8 = 4.8%).
+ * Year 1 of the simulation is treated as 2027. Tax thresholds that the law
+ * froze through 2027 stay flat in year 1 and are indexed to CPI afterwards.
+ *
+ * Sources for every rule: reports/Israeli tax rules simulator check.md
  */
 
 // ---------------------------------------------------------------------------
-// Constants (Israeli tax rules, 2025 brackets — frozen through 2027)
+// Constants — Israeli rules as of late 2026
 // ---------------------------------------------------------------------------
 
-/** מס רכישה — דירה יחידה (brackets: [upper bound, rate]) */
-export const PURCHASE_TAX_FIRST: ReadonlyArray<readonly [number, number]> = [
+/** מס רכישה — דירה יחידה / משפר דיור. Amounts of 16.1.2024, frozen until 15.1.2028. */
+export const PURCHASE_TAX_SINGLE: ReadonlyArray<readonly [number, number]> = [
   [1_978_745, 0],
   [2_347_040, 0.035],
   [6_055_070, 0.05],
@@ -22,50 +26,85 @@ export const PURCHASE_TAX_FIRST: ReadonlyArray<readonly [number, number]> = [
   [Infinity, 0.1],
 ];
 
-/** מס רכישה — דירה נוספת: 8% from the first shekel, 10% above the top bracket */
+/** מס רכישה — דירה נוספת (temporary order, purchases up to 10.2.2027 unless extended). */
 export const PURCHASE_TAX_ADDITIONAL: ReadonlyArray<readonly [number, number]> = [
   [6_055_070, 0.08],
   [Infinity, 0.1],
 ];
 
-/** עו״ד, תיווך, שמאי, יועץ משכנתאות */
-export const CLOSING_COSTS_RATE = 0.02;
-/** עמלת תיווך + עו״ד במכירה */
-export const SELLING_COSTS_RATE = 0.01;
-/** תקרת פטור חודשית במסלול הפטור על שכר דירה (2025), צמודה למדד */
+/** VAT since 1.1.2025 */
+export const VAT = 0.18;
+/** Typical broker fee (each side), before VAT */
+export const BROKER_RATE = 0.02;
+/** Typical lawyer fee (each side), before VAT */
+export const LAWYER_RATE = 0.005;
+/** Appraiser, mortgage advisor, bank fees, registration — fixed, ₪ */
+export const BUY_FIXED_COSTS = 10_000;
+
+/** Landlord running costs */
+export const VACANCY_MONTHS_PER_YEAR = 1;
+export const MAINTENANCE_RATE = 0.08; // repairs reserve, % of rent collected
+export const INSURANCE_MONTHLY = 150; // building + mortgage life insurance, ₪ (indexed)
+
+/** Rental income: monthly exemption ceiling (frozen 2024–2027), 10% track, marginal rate for the taper */
 export const RENT_EXEMPT_CEILING_MONTHLY = 5_654;
-/** מסלול 10% על הכנסות שכירות */
 export const RENT_FLAT_TAX_RATE = 0.1;
-/** מס רווחי הון / מס שבח ריאלי */
+export const MARGINAL_TAX_RATE = 0.31;
+
+/** מס שבח / capital gains on real gain */
 export const CAPITAL_GAINS_TAX_RATE = 0.25;
-/** דירה יחידה פטורה ממס שבח לאחר 18 חודשי החזקה */
+/** Sole-apartment exemption needs 18 months of ownership */
 export const SHEVACH_EXEMPT_MONTHS = 18;
-/** יחס מימון מקסימלי לפי בנק ישראל */
-export const MAX_LTV_FIRST = 0.75;
-export const MAX_LTV_ADDITIONAL = 0.5;
+/** Sole-apartment exemption price ceiling (2024–2027, frozen) */
+export const SHEVACH_SINGLE_CEILING = 5_008_000;
+
+/** מס יסף: 3% + 2% on capital income above the threshold (2025–2027, frozen) */
+export const SURTAX_RATE = 0.05;
+export const SURTAX_THRESHOLD = 721_560;
+/** Non-exempt apartment sales at or below this value are excluded from surtax */
+export const SURTAX_RE_SALE_THRESHOLD = 5_382_285;
+
+/** Bank of Israel LTV limits (Directive 329) */
+export const MAX_LTV = { single: 0.75, upgrader: 0.7, additional: 0.5 } as const;
+
+/** Dividend withholding drag inside the fund, % per year of fund value */
+export const DIVIDEND_DRAG = { israeli: 0.0025, irish: 0.0019 } as const;
 
 // ---------------------------------------------------------------------------
 // Input schema
 // ---------------------------------------------------------------------------
+
+export type ApartmentType = "single" | "upgrader" | "additional";
+export type SpVehicle = "israeli" | "irish";
 
 export interface SimInputs {
   equity: number;
   years: number;
   propertyPrice: number;
   autoPrice: boolean;
-  isFirstApartment: boolean;
+  apartmentType: ApartmentType;
+  useBroker: boolean;
   mortgageRate: number;
   mortgageTerm: number;
   rentalYield: number;
+  rentGrowth: number;
   appreciation: number;
   spReturn: number;
   spFee: number;
+  spVehicle: SpVehicle;
   cashflowMatching: boolean;
   inflation: number;
+  loanEnabled: boolean;
+  loanAmount: number;
+  loanRate: number;
+  loanTerm: number;
 }
 
 type NumericKey = {
   [K in keyof SimInputs]: SimInputs[K] extends number ? K : never;
+}[keyof SimInputs];
+type BoolKey = {
+  [K in keyof SimInputs]: SimInputs[K] extends boolean ? K : never;
 }[keyof SimInputs];
 
 export interface Bound {
@@ -81,10 +120,14 @@ export const BOUNDS: Record<NumericKey, Bound> = {
   mortgageRate: { min: 1, max: 9, step: 0.05 },
   mortgageTerm: { min: 5, max: 30, step: 1 },
   rentalYield: { min: 1, max: 7, step: 0.05 },
+  rentGrowth: { min: -2, max: 8, step: 0.1 },
   appreciation: { min: -2, max: 10, step: 0.1 },
   spReturn: { min: 0, max: 15, step: 0.1 },
   spFee: { min: 0, max: 2, step: 0.01 },
   inflation: { min: 0, max: 6, step: 0.1 },
+  loanAmount: { min: 10_000, max: 1_500_000, step: 10_000 },
+  loanRate: { min: 2, max: 15, step: 0.1 },
+  loanTerm: { min: 1, max: 20, step: 1 },
 };
 
 export const DEFAULT_INPUTS: SimInputs = {
@@ -92,15 +135,22 @@ export const DEFAULT_INPUTS: SimInputs = {
   years: 15,
   propertyPrice: 2_000_000,
   autoPrice: false,
-  isFirstApartment: true,
+  apartmentType: "single",
+  useBroker: true,
   mortgageRate: 4.8,
   mortgageTerm: 25,
   rentalYield: 3.2,
+  rentGrowth: 3.0,
   appreciation: 4.0,
   spReturn: 9.5,
   spFee: 0.15,
+  spVehicle: "israeli",
   cashflowMatching: true,
   inflation: 2.5,
+  loanEnabled: false,
+  loanAmount: 200_000,
+  loanRate: 7.5,
+  loanTerm: 10,
 };
 
 // ---------------------------------------------------------------------------
@@ -109,9 +159,9 @@ export const DEFAULT_INPUTS: SimInputs = {
 
 export interface YearPoint {
   year: number;
-  /** שווי נטו במסלול הנדל״ן אחרי מכירה, סילוק משכנתא ומסים */
+  /** שווי נטו במסלול הנדל״ן אחרי מכירה, סילוק משכנתא והלוואה ומסים */
   realEstate: number;
-  /** שווי נטו במסלול ה-S&P אחרי מס רווחי הון */
+  /** שווי נטו במסלול ה-S&P אחרי מס רווחי הון ומס יסף */
   sp500: number;
   propertyValue: number;
   mortgageBalance: number;
@@ -120,39 +170,50 @@ export interface YearPoint {
 }
 
 export interface RealEstateSummary {
+  apartmentType: ApartmentType;
   propertyPrice: number;
   purchaseTax: number;
   closingCosts: number;
   downPayment: number;
+  /** Mortgage principal */
   loanAmount: number;
   ltv: number;
   maxLtv: number;
   ltvExceeded: boolean;
-  /** Highest price the bank would finance with this equity */
+  /** Highest price the bank would finance with the available cash */
   maxPrice: number;
   /** The chosen price was above maxPrice and was lowered to it */
   priceCapped: boolean;
-  /** Equity doesn't even cover purchase tax + closing costs */
+  /** Cash can't cover costs + down payment (should never happen: price is capped) */
   equityShortfall: boolean;
   monthlyMortgagePayment: number;
+  /** Supplementary down-payment loan */
+  extraLoanPrincipal: number;
+  extraLoanPayment: number;
+  extraLoanInterestPaid: number;
+  extraLoanRemaining: number;
   initialMonthlyRentGross: number;
   initialMonthlyRentNet: number;
-  /** Mortgage payment − net rent in month 1 (positive = out of pocket) */
+  /** Mortgage + loan payments − net rent in month 1 (positive = out of pocket) */
   initialMonthlyGap: number;
+  netYieldPct: number;
   totalCashInvested: number;
   outOfPocketContributions: number;
   totalInterestPaid: number;
   totalRentGross: number;
+  totalVacancyLoss: number;
+  totalOwnershipCosts: number;
   totalRentTax: number;
   finalPropertyValue: number;
   remainingMortgage: number;
   sellingCosts: number;
   shevachTax: number;
   shevachExempt: boolean;
-  /** Rent surpluses (and any unused equity) invested in an index fund */
+  /** Part of the gain above the sole-apartment ceiling was taxed */
+  shevachPartial: boolean;
+  surtax: number;
   sideFundValue: number;
   sideFundTax: number;
-  /** Rent surpluses kept as cash when matching is off */
   idleCash: number;
   grossValue: number;
   grossGain: number;
@@ -161,12 +222,14 @@ export interface RealEstateSummary {
 }
 
 export interface SP500Summary {
+  vehicle: SpVehicle;
   initialInvestment: number;
   monthlyContributionsTotal: number;
   totalCashInvested: number;
   grossValue: number;
   grossGain: number;
   capitalGainsTax: number;
+  surtax: number;
   netWorth: number;
   totalReturnPct: number;
   netAnnualReturn: number;
@@ -198,8 +261,10 @@ function safeNum(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+const BOOL_KEYS: BoolKey[] = ["autoPrice", "useBroker", "cashflowMatching", "loanEnabled"];
+
 /** Coerce arbitrary (possibly URL-sourced) input into a valid SimInputs. */
-export function sanitizeInputs(raw: Partial<Record<keyof SimInputs, unknown>>): SimInputs {
+export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApartment", unknown>>): SimInputs {
   const out = { ...DEFAULT_INPUTS };
   (Object.keys(BOUNDS) as NumericKey[]).forEach((k) => {
     const b = BOUNDS[k];
@@ -207,11 +272,20 @@ export function sanitizeInputs(raw: Partial<Record<keyof SimInputs, unknown>>): 
   });
   out.years = Math.round(out.years);
   out.mortgageTerm = Math.round(out.mortgageTerm);
+  out.loanTerm = Math.round(out.loanTerm);
   const bool = (v: unknown, d: boolean) =>
     typeof v === "boolean" ? v : v === "1" || v === "true" ? true : v === "0" || v === "false" ? false : d;
-  out.autoPrice = bool(raw.autoPrice, DEFAULT_INPUTS.autoPrice);
-  out.isFirstApartment = bool(raw.isFirstApartment, DEFAULT_INPUTS.isFirstApartment);
-  out.cashflowMatching = bool(raw.cashflowMatching, DEFAULT_INPUTS.cashflowMatching);
+  BOOL_KEYS.forEach((k) => {
+    out[k] = bool(raw[k], DEFAULT_INPUTS[k]);
+  });
+  const t = raw.apartmentType;
+  if (t === "single" || t === "upgrader" || t === "additional") out.apartmentType = t;
+  else if (raw.isFirstApartment !== undefined) {
+    // legacy share links
+    out.apartmentType = bool(raw.isFirstApartment, true) ? "single" : "additional";
+  }
+  const v = raw.spVehicle;
+  if (v === "israeli" || v === "irish") out.spVehicle = v;
   return out;
 }
 
@@ -228,8 +302,18 @@ export function bracketTax(amount: number, brackets: ReadonlyArray<readonly [num
   return tax;
 }
 
-export function purchaseTax(price: number, isFirstApartment: boolean): number {
-  return bracketTax(price, isFirstApartment ? PURCHASE_TAX_FIRST : PURCHASE_TAX_ADDITIONAL);
+/** Upgraders pay single-apartment rates (assuming they sell the old home within the deadline). */
+export function purchaseTax(price: number, type: ApartmentType): number {
+  return bracketTax(price, type === "additional" ? PURCHASE_TAX_ADDITIONAL : PURCHASE_TAX_SINGLE);
+}
+
+export function buyingCosts(price: number, useBroker: boolean): number {
+  const pct = ((useBroker ? BROKER_RATE : 0) + LAWYER_RATE) * (1 + VAT);
+  return price * pct + BUY_FIXED_COSTS;
+}
+
+export function sellingCostRate(useBroker: boolean): number {
+  return ((useBroker ? BROKER_RATE : 0) + LAWYER_RATE) * (1 + VAT);
 }
 
 /** Spitzer (annuity) monthly payment. Handles a 0% rate. */
@@ -242,17 +326,31 @@ export function spitzerPayment(principal: number, annualRatePct: number, years: 
 }
 
 /**
- * The most expensive property the bank would finance with this equity.
- * The equity must cover purchase tax + closing costs + the minimum down payment
- * (25% for a single apartment, 50% for an additional one), so we find the
- * largest price P with: equity − tax(P) − 2%·P ≥ (1 − maxLtv)·P.
- * Rounded down to the slider step and kept inside the slider bounds.
+ * Monthly rental tax: the cheaper of the exemption track (full exemption up to
+ * the ceiling, tapering to zero at twice the ceiling, remainder at the marginal
+ * rate) and the 10% track on gross rent.
  */
-export function maxAffordablePrice(equity: number, isFirstApartment: boolean): number {
+export function monthlyRentTax(rent: number, ceiling: number): number {
+  if (!(rent > ceiling)) return 0;
+  const exempt = Math.max(0, Math.min(ceiling, 2 * ceiling - rent));
+  const exemptionTrack = MARGINAL_TAX_RATE * (rent - exempt);
+  return Math.min(RENT_FLAT_TAX_RATE * rent, exemptionTrack);
+}
+
+/** Surtax on capital income above the (indexed) threshold. */
+export function surtax(capitalIncome: number, threshold: number): number {
+  return SURTAX_RATE * Math.max(0, capitalIncome - threshold);
+}
+
+/**
+ * The most expensive property the bank would finance with this cash.
+ * Cash must cover purchase tax + buying costs + the minimum down payment
+ * (25% single, 30% upgrader, 50% additional). Rounded down to the slider step.
+ */
+export function maxAffordablePrice(cash: number, type: ApartmentType, useBroker = true): number {
   const b = BOUNDS.propertyPrice;
-  const maxLtv = isFirstApartment ? MAX_LTV_FIRST : MAX_LTV_ADDITIONAL;
-  const fits = (p: number) =>
-    equity - purchaseTax(p, isFirstApartment) - p * CLOSING_COSTS_RATE >= (1 - maxLtv) * p - 1e-6;
+  const maxLtv = MAX_LTV[type];
+  const fits = (p: number) => cash - purchaseTax(p, type) - buyingCosts(p, useBroker) >= (1 - maxLtv) * p - 1e-6;
   if (fits(b.max)) return b.max;
   let lo = 0;
   let hi = b.max;
@@ -265,19 +363,15 @@ export function maxAffordablePrice(equity: number, isFirstApartment: boolean): n
   return clamp(stepped, b.min, b.max);
 }
 
-/**
- * Price used in the simulation: the user's choice (or, in auto mode, the
- * maximum), never above what the bank would finance.
- */
-export function effectivePropertyPrice(inputs: SimInputs): number {
-  const cap = maxAffordablePrice(inputs.equity, inputs.isFirstApartment);
-  return inputs.autoPrice ? cap : Math.min(inputs.propertyPrice, cap);
+/** Cash available for the purchase: equity plus the optional down-payment loan. */
+export function purchaseCash(inputs: SimInputs): number {
+  return inputs.equity + (inputs.loanEnabled ? inputs.loanAmount : 0);
 }
 
-/** After-tax value of an index-fund position with an inflation-indexed cost basis. */
-function afterRealGainsTax(value: number, indexedBasis: number): { net: number; tax: number } {
-  const tax = CAPITAL_GAINS_TAX_RATE * Math.max(0, value - indexedBasis);
-  return { net: value - tax, tax };
+/** Price used in the simulation: the user's choice (or the maximum in auto mode), never above the bank limit. */
+export function effectivePropertyPrice(inputs: SimInputs): number {
+  const cap = maxAffordablePrice(purchaseCash(inputs), inputs.apartmentType, inputs.useBroker);
+  return inputs.autoPrice ? cap : Math.min(inputs.propertyPrice, cap);
 }
 
 // ---------------------------------------------------------------------------
@@ -289,109 +383,142 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const {
     equity,
     years,
-    isFirstApartment,
+    apartmentType,
+    useBroker,
     mortgageRate,
     mortgageTerm,
     rentalYield,
+    rentGrowth,
     appreciation,
     spReturn,
     spFee,
+    spVehicle,
     cashflowMatching,
     inflation,
   } = inputs;
 
-  const maxPrice = maxAffordablePrice(inputs.equity, isFirstApartment);
+  const cash = purchaseCash(inputs);
+  const maxPrice = maxAffordablePrice(cash, apartmentType, useBroker);
   const price = effectivePropertyPrice(inputs);
   const totalMonths = years * 12;
 
-  // --- Monthly rates -------------------------------------------------------
+  // --- Rates -----------------------------------------------------------------
   const inflMonthly = Math.pow(1 + inflation / 100, 1 / 12) - 1;
-  const spNetAnnual = Math.max(-0.99, (1 + spReturn / 100) * (1 - spFee / 100) - 1);
+  const spNetAnnual = Math.max(-0.99, (1 + spReturn / 100) * (1 - spFee / 100) - 1 - DIVIDEND_DRAG[spVehicle]);
   const spMonthly = Math.pow(1 + spNetAnnual, 1 / 12) - 1;
+  // Israeli tracking funds: cost basis indexed to CPI. Irish ETFs: indexed to
+  // USD/ILS, assumed flat, so the nominal gain is taxed.
+  const basisMonthly = spVehicle === "israeli" ? inflMonthly : 0;
   const mortMonthly = mortgageRate / 100 / 12;
   const g = appreciation / 100;
+  /** Frozen-through-2027 thresholds: flat in year 1, CPI-indexed after. */
+  const thresholdIndex = (tYears: number) => Math.pow(1 + inflation / 100, Math.max(0, tYears - 1));
 
-  // --- Upfront real-estate costs -------------------------------------------
-  const pTax = purchaseTax(price, isFirstApartment);
-  const closing = price * CLOSING_COSTS_RATE;
-  const downPaymentRaw = equity - pTax - closing;
+  // --- Upfront ---------------------------------------------------------------
+  const pTax = purchaseTax(price, apartmentType);
+  const closing = buyingCosts(price, useBroker);
+  const downPaymentRaw = cash - pTax - closing;
   const equityShortfall = downPaymentRaw <= 0;
   const downPayment = Math.max(0, Math.min(price, downPaymentRaw));
-  // If equity can't cover costs the shortfall is (unrealistically) financed —
-  // flagged in the UI, but the math stays consistent: cash out == equity.
   const loanAmount = Math.max(0, price - downPaymentRaw);
-  const unusedEquity = Math.max(0, downPaymentRaw - price);
-  const maxLtv = isFirstApartment ? MAX_LTV_FIRST : MAX_LTV_ADDITIONAL;
+  const unusedCash = Math.max(0, downPaymentRaw - price);
+  const maxLtv = MAX_LTV[apartmentType];
   const ltv = price > 0 ? loanAmount / price : 0;
   const pmt = spitzerPayment(loanAmount, mortgageRate, mortgageTerm);
   const termMonths = mortgageTerm * 12;
   const costBasis = price + pTax + closing;
+  const sellRate = sellingCostRate(useBroker);
 
-  // --- State ---------------------------------------------------------------
+  const extraPrincipal = inputs.loanEnabled ? inputs.loanAmount : 0;
+  const extraPmt = spitzerPayment(extraPrincipal, inputs.loanRate, inputs.loanTerm);
+  const extraMonthly = inputs.loanRate / 100 / 12;
+  const extraTermMonths = inputs.loanTerm * 12;
+
+  // --- State -----------------------------------------------------------------
   let balance = loanAmount;
+  let extraBalance = extraPrincipal;
   let sp = equity;
-  let spBasis = equity; // inflation-indexed cost basis
+  let spBasis = equity;
   let spContrib = 0;
-  let side = unusedEquity; // RE-track index fund for rent surpluses
-  let sideBasis = unusedEquity;
+  let side = unusedCash; // RE-track index fund for rent surpluses / unused cash
+  let sideBasis = unusedCash;
   let idleCash = 0;
   let outOfPocket = 0;
   let interestPaid = 0;
+  let extraInterest = 0;
   let rentGrossTotal = 0;
+  let vacancyTotal = 0;
+  let ownershipTotal = 0;
   let rentTaxTotal = 0;
   let initialRentGross = 0;
   let initialRentNet = 0;
   let initialGap = 0;
 
-  const snapshot = (month: number): YearPoint & {
-    sellCosts: number;
-    shevach: number;
-    shevachExempt: boolean;
-    sideTax: number;
-    sideNet: number;
-    spTax: number;
-  } => {
+  const snapshot = (month: number) => {
     const t = month / 12;
+    const idx = thresholdIndex(t);
     const propertyValue = price * Math.pow(1 + g, t);
-    const sellCosts = propertyValue * SELLING_COSTS_RATE;
-    const shevachExempt = isFirstApartment && month >= SHEVACH_EXEMPT_MONTHS;
-    const realGain = propertyValue - sellCosts - costBasis * Math.pow(1 + inflMonthly, month);
-    const shevach = shevachExempt ? 0 : CAPITAL_GAINS_TAX_RATE * Math.max(0, realGain);
-    const sideRes = afterRealGainsTax(side, sideBasis);
-    const spRes = afterRealGainsTax(sp, spBasis);
-    const realEstate = propertyValue - sellCosts - balance - shevach + sideRes.net + idleCash;
+    const sellCosts = propertyValue * sellRate;
+    const realGain = Math.max(0, propertyValue - sellCosts - costBasis * Math.pow(1 + inflMonthly, month));
+
+    // מס שבח
+    let taxableGain = realGain;
+    let shevachExempt = false;
+    let shevachPartial = false;
+    if (apartmentType !== "additional" && month >= SHEVACH_EXEMPT_MONTHS) {
+      const ceiling = SHEVACH_SINGLE_CEILING * idx;
+      if (propertyValue <= ceiling) {
+        taxableGain = 0;
+        shevachExempt = true;
+      } else {
+        taxableGain = realGain * ((propertyValue - ceiling) / propertyValue);
+        shevachPartial = true;
+      }
+    }
+    const shevach = CAPITAL_GAINS_TAX_RATE * taxableGain;
+
+    // Index funds
+    const sideGain = Math.max(0, side - sideBasis);
+    const sideTax = CAPITAL_GAINS_TAX_RATE * sideGain;
+    const spGain = Math.max(0, sp - spBasis);
+    const spTax = CAPITAL_GAINS_TAX_RATE * spGain;
+
+    // מס יסף (sale in a single year, no other income assumed)
+    const threshold = SURTAX_THRESHOLD * idx;
+    const reSaleInSurtax = taxableGain > 0 && propertyValue > SURTAX_RE_SALE_THRESHOLD * idx;
+    const reSurtax = surtax((reSaleInSurtax ? taxableGain : 0) + sideGain, threshold);
+    const spSurtax = surtax(spGain, threshold);
+
+    const realEstate =
+      propertyValue - sellCosts - balance - extraBalance - shevach - reSurtax + (side - sideTax) + idleCash;
+    const sp500 = sp - spTax - spSurtax;
     return {
-      year: Math.round(t),
-      realEstate,
-      sp500: spRes.net,
-      propertyValue,
-      mortgageBalance: balance,
-      diff: realEstate - spRes.net,
+      point: {
+        year: Math.round(t),
+        realEstate,
+        sp500,
+        propertyValue,
+        mortgageBalance: balance,
+        diff: realEstate - sp500,
+      } as YearPoint,
       sellCosts,
       shevach,
       shevachExempt,
-      sideTax: sideRes.tax,
-      sideNet: sideRes.net,
-      spTax: spRes.tax,
+      shevachPartial,
+      sideTax,
+      spTax,
+      reSurtax,
+      spSurtax,
     };
   };
 
-  const strip = (s: ReturnType<typeof snapshot>): YearPoint => ({
-    year: s.year,
-    realEstate: s.realEstate,
-    sp500: s.sp500,
-    propertyValue: s.propertyValue,
-    mortgageBalance: s.mortgageBalance,
-    diff: s.diff,
-  });
-
-  const points: YearPoint[] = [strip(snapshot(0))];
   let last = snapshot(0);
+  const points: YearPoint[] = [last.point];
 
   for (let m = 1; m <= totalMonths; m++) {
     const yearIdx = Math.floor((m - 1) / 12);
 
-    // 1. Mortgage payment (Spitzer)
+    // 1. Mortgage (Spitzer)
     let payment = 0;
     if (balance > 0 && m <= termMonths) {
       const interest = balance * mortMonthly;
@@ -401,23 +528,36 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
       interestPaid += interest;
     }
 
-    // 2. Rent (re-priced annually off current property value) and rental tax
-    const valueAtYearStart = price * Math.pow(1 + g, yearIdx);
-    const rentGross = Math.max(0, (valueAtYearStart * rentalYield) / 100 / 12);
-    const ceiling = RENT_EXEMPT_CEILING_MONTHLY * Math.pow(1 + inflation / 100, yearIdx);
-    const rentTax = rentGross > ceiling ? rentGross * RENT_FLAT_TAX_RATE : 0;
-    const rentNet = rentGross - rentTax;
+    // 2. Down-payment loan (Spitzer)
+    let extraPayment = 0;
+    if (extraBalance > 0 && m <= extraTermMonths) {
+      const interest = extraBalance * extraMonthly;
+      extraPayment = Math.min(extraPmt, extraBalance + interest);
+      extraBalance = extraBalance + interest - extraPayment;
+      if (extraBalance < 0.005) extraBalance = 0;
+      extraInterest += interest;
+    }
+
+    // 3. Rent: grows yearly; one vacant month a year; tax; landlord costs
+    const rentGross = Math.max(0, ((price * rentalYield) / 100 / 12) * Math.pow(1 + rentGrowth / 100, yearIdx));
+    const collected = rentGross * (1 - VACANCY_MONTHS_PER_YEAR / 12);
+    const ceiling = RENT_EXEMPT_CEILING_MONTHLY * thresholdIndex(yearIdx + 1);
+    const rentTax = monthlyRentTax(collected, ceiling);
+    const ownership = collected * MAINTENANCE_RATE + INSURANCE_MONTHLY * Math.pow(1 + inflation / 100, yearIdx);
+    const rentNet = collected - rentTax - ownership;
     rentGrossTotal += rentGross;
+    vacancyTotal += rentGross - collected;
+    ownershipTotal += ownership;
     rentTaxTotal += rentTax;
 
-    // 3. Grow investment balances; index cost bases to inflation
+    // 4. Grow funds; index cost bases
     sp *= 1 + spMonthly;
     side *= 1 + spMonthly;
-    spBasis *= 1 + inflMonthly;
-    sideBasis *= 1 + inflMonthly;
+    spBasis *= 1 + basisMonthly;
+    sideBasis *= 1 + basisMonthly;
 
-    // 4. Cash-flow matching
-    const gap = payment - rentNet;
+    // 5. Cash-flow matching
+    const gap = payment + extraPayment - rentNet;
     if (m === 1) {
       initialRentGross = rentGross;
       initialRentNet = rentNet;
@@ -442,15 +582,16 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
 
     if (m % 12 === 0) {
       last = snapshot(m);
-      points.push(strip(last));
+      points.push(last.point);
     }
   }
 
-  // --- Summaries -----------------------------------------------------------
+  // --- Summaries -------------------------------------------------------------
   const reCash = equity + outOfPocket;
-  const reGross = last.propertyValue - balance + side + idleCash;
-  const reNet = last.realEstate;
+  const reGross = last.point.propertyValue - balance - extraBalance + side + idleCash;
+  const reNet = last.point.realEstate;
   const realEstate: RealEstateSummary = {
+    apartmentType,
     propertyPrice: price,
     purchaseTax: pTax,
     closingCosts: closing,
@@ -463,19 +604,28 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     priceCapped: !inputs.autoPrice && inputs.propertyPrice > maxPrice,
     equityShortfall,
     monthlyMortgagePayment: pmt,
+    extraLoanPrincipal: extraPrincipal,
+    extraLoanPayment: extraPmt,
+    extraLoanInterestPaid: extraInterest,
+    extraLoanRemaining: extraBalance,
     initialMonthlyRentGross: initialRentGross,
     initialMonthlyRentNet: initialRentNet,
     initialMonthlyGap: initialGap,
+    netYieldPct: price > 0 ? ((initialRentNet * 12) / price) * 100 : 0,
     totalCashInvested: reCash,
     outOfPocketContributions: outOfPocket,
     totalInterestPaid: interestPaid,
     totalRentGross: rentGrossTotal,
+    totalVacancyLoss: vacancyTotal,
+    totalOwnershipCosts: ownershipTotal,
     totalRentTax: rentTaxTotal,
-    finalPropertyValue: last.propertyValue,
+    finalPropertyValue: last.point.propertyValue,
     remainingMortgage: balance,
     sellingCosts: last.sellCosts,
     shevachTax: last.shevach,
     shevachExempt: last.shevachExempt,
+    shevachPartial: last.shevachPartial,
+    surtax: last.reSurtax,
     sideFundValue: side,
     sideFundTax: last.sideTax,
     idleCash,
@@ -487,19 +637,21 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
 
   const spCash = equity + spContrib;
   const sp500: SP500Summary = {
+    vehicle: spVehicle,
     initialInvestment: equity,
     monthlyContributionsTotal: spContrib,
     totalCashInvested: spCash,
     grossValue: sp,
     grossGain: sp - spCash,
     capitalGainsTax: last.spTax,
-    netWorth: last.sp500,
-    totalReturnPct: spCash > 0 ? (last.sp500 / spCash - 1) * 100 : 0,
+    surtax: last.spSurtax,
+    netWorth: last.point.sp500,
+    totalReturnPct: spCash > 0 ? (last.point.sp500 / spCash - 1) * 100 : 0,
     netAnnualReturn: spNetAnnual * 100,
   };
 
-  const difference = Math.abs(reNet - last.sp500);
-  const winner = difference < 1_000 ? "tie" : reNet > last.sp500 ? "realEstate" : "sp500";
+  const difference = Math.abs(reNet - last.point.sp500);
+  const winner = difference < 1_000 ? "tie" : reNet > last.point.sp500 ? "realEstate" : "sp500";
 
   const crossovers: Crossover[] = [];
   for (let i = 1; i < points.length; i++) {

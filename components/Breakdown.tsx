@@ -28,16 +28,24 @@ export default function Breakdown({ result }: { result: SimResult }) {
   const sp = result.sp500;
   const matching = result.inputs.cashflowMatching;
 
+  const loan = re.extraLoanPrincipal > 0;
   const groups: { title: string; lines: Line[] }[] = [
     {
       title: "כסף שהושקע",
       lines: [
         { label: "הון עצמי התחלתי", re: result.inputs.equity, sp: sp.initialInvestment },
+        ...(loan
+          ? [{ label: "הלוואה להון העצמי", re: re.extraLoanPrincipal, sp: null, note: "כסף מושאל, לא נספר כהשקעה שלכם" } as Line]
+          : []),
         {
           label: "השלמות חודשיות מהכיס",
           re: re.outOfPocketContributions,
           sp: sp.monthlyContributionsTotal,
-          note: matching ? "פער משכנתא מול שכירות" : "ההשלמה כבויה — ה-S&P לא מקבל הפקדות",
+          note: matching
+            ? loan
+              ? "החזרי משכנתא והלוואה פחות שכירות נטו"
+              : "החזר משכנתא פחות שכירות נטו"
+            : "ההשלמה כבויה, ה-S&P לא מקבל הפקדות",
         },
         { label: "סך מזומן שהושקע", re: re.totalCashInvested, sp: sp.totalCashInvested, strong: true },
       ],
@@ -46,10 +54,33 @@ export default function Breakdown({ result }: { result: SimResult }) {
       title: "עלויות ומסים בדרך",
       lines: [
         { label: "מס רכישה", re: re.purchaseTax, sp: null, negative: true },
-        { label: "עו״ד, תיווך, שמאי (2%)", re: re.closingCosts, sp: null, negative: true },
+        {
+          label: "עלויות קנייה",
+          re: re.closingCosts,
+          sp: null,
+          negative: true,
+          note: result.inputs.useBroker ? "תיווך, עו״ד, מע״מ, שמאי, יועץ" : "עו״ד, מע״מ, שמאי, יועץ",
+        },
         { label: "ריבית משכנתא ששולמה", re: re.totalInterestPaid, sp: null, negative: true, note: "כלולה בהחזרים החודשיים" },
-        { label: "הכנסות שכירות (ברוטו)", re: re.totalRentGross, sp: null },
-        { label: "מס על שכירות", re: re.totalRentTax, sp: null, negative: true },
+        ...(loan
+          ? [{ label: "ריבית על ההלוואה", re: re.extraLoanInterestPaid, sp: null, negative: true } as Line]
+          : []),
+        { label: "שכר דירה (ברוטו)", re: re.totalRentGross, sp: null },
+        { label: "חודשים פנויים", re: re.totalVacancyLoss, sp: null, negative: true, note: "חודש אחד בשנה" },
+        { label: "תחזוקה וביטוחים", re: re.totalOwnershipCosts, sp: null, negative: true, note: "8% מהשכירות + ביטוח מבנה וחיים" },
+        {
+          label: "מס על שכירות",
+          re: re.totalRentTax,
+          sp: null,
+          negative: true,
+          note: "פטור עד ₪5,654 לחודש, מעל זה המסלול הזול מבין 10% והפטור החלקי",
+        },
+        {
+          label: "דליפת מס דיבידנדים",
+          re: null,
+          sp: sp.vehicle === "israeli" ? "כ-0.25% בשנה" : "כ-0.19% בשנה",
+          note: "מנוכה מהתשואה בתוך הקרן",
+        },
       ],
     },
     {
@@ -57,8 +88,9 @@ export default function Breakdown({ result }: { result: SimResult }) {
       lines: [
         { label: "שווי הנכס / תיק ההשקעות", re: re.finalPropertyValue, sp: sp.grossValue },
         { label: "יתרת משכנתא שנותרה", re: re.remainingMortgage, sp: null, negative: true },
+        ...(loan ? [{ label: "יתרת ההלוואה שנותרה", re: re.extraLoanRemaining, sp: null, negative: true } as Line] : []),
         ...(re.sideFundValue > 0.5
-          ? [{ label: "תיק מדד מעודפי שכירות", re: re.sideFundValue, sp: null, note: "עודפי שכ״ד שהושקעו במדד" } as Line]
+          ? [{ label: "תיק מדד מעודפי שכירות", re: re.sideFundValue, sp: null, note: "עודפים שהושקעו במדד" } as Line]
           : []),
         ...(re.idleCash > 0.5 ? [{ label: "עודפי שכירות במזומן", re: re.idleCash, sp: null } as Line] : []),
         {
@@ -67,19 +99,37 @@ export default function Breakdown({ result }: { result: SimResult }) {
           sp: sp.grossGain,
           strong: true,
         },
-        { label: "עלויות מכירה (1%)", re: re.sellingCosts, sp: null, negative: true },
+        {
+          label: "עלויות מכירה",
+          re: re.sellingCosts,
+          sp: null,
+          negative: true,
+          note: result.inputs.useBroker ? "תיווך 2% + עו״ד 0.5% + מע״מ" : "עו״ד 0.5% + מע״מ",
+        },
         {
           label: "מס שבח",
           re: re.shevachExempt ? "פטור (דירה יחידה)" : re.shevachTax,
           sp: null,
           negative: true,
-          note: re.shevachExempt ? undefined : "25% על הרווח הריאלי",
+          note: re.shevachPartial
+            ? "חלקי: מחיר המכירה מעל תקרת הפטור"
+            : re.shevachExempt
+              ? undefined
+              : "25% על הרווח הריאלי",
         },
         {
-          label: "מס רווחי הון ריאלי (25%)",
+          label: "מס רווחי הון (25%)",
           re: re.sideFundTax > 0.5 ? re.sideFundTax : null,
           sp: sp.capitalGainsTax,
           negative: true,
+          note: sp.vehicle === "irish" ? "ETF אירי: על הרווח הנומינלי בשקלים" : "על הרווח הריאלי",
+        },
+        {
+          label: "מס יסף (5%)",
+          re: re.surtax,
+          sp: sp.surtax,
+          negative: true,
+          note: "על רווח הון מעל ₪721,560 בשנת המכירה",
         },
       ],
     },
@@ -142,8 +192,9 @@ export default function Breakdown({ result }: { result: SimResult }) {
             </tbody>
           </table>
           <p className="mt-3 px-2 text-[11px] leading-relaxed text-slate-400">
-            הנחות: מס רכישה לפי מדרגות 2025 · פטור על שכירות עד ₪5,654 לחודש (צמוד למדד), מעליו מסלול 10% · מס שבח ומס רווחי
-            הון 25% על רווח ריאלי (בניכוי אינפלציה של {result.inputs.inflation}% בשנה) · דמי ניהול מנוכים מהתשואה.
+            הנחות: מדרגות מס רכישה הקפואות עד 15.1.2028 · תקרות המס קפואות עד סוף 2027 וצמודות למדד אחר כך · מכירה בשנה אחת
+            ובלי הכנסות נוספות באותה שנה (לצורך מס יסף) · לא כולל פחת רעיוני שרשות המסים מנכה בדירה מושכרת · אינפלציה{" "}
+            {result.inputs.inflation}% בשנה.
           </p>
         </div>
       )}
