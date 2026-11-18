@@ -470,7 +470,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               />
               <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
                 {inputs.spVehicle === "israeli"
-                  ? "מס 25% רק על הרווח שמעל האינפלציה."
+                  ? "מס 25% רק על הרווח שמעל האינפלציה. שימו לב: בחלק מהקרנות המחקות המס צמוד לדולר ולא למדד, וזה כתוב בתשקיף."
                   : "מס 25% על כל הרווח בשקלים (צמוד לדולר, כאן בהנחה שהשער לא משתנה)."}
               </p>
             </div>
@@ -489,7 +489,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               value={inputs.inflation}
               bound={BOUNDS.inflation}
               onChange={(v) => set("inflation", v)}
-              hint="יעד בנק ישראל: 1% עד 3%"
+              hint="יעד בנק ישראל 1% עד 3%. התחזית ל-2027: כ-2%"
             />
           </div>
         )}

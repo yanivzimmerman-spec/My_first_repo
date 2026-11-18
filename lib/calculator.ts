@@ -83,8 +83,11 @@ export function maxLtvFor(type: ApartmentType, sellFirst: boolean): number {
   return type === "upgrader" && sellFirst ? MAX_LTV.single : MAX_LTV[type];
 }
 
-/** Dividend withholding drag inside the fund, % per year of fund value */
-export const DIVIDEND_DRAG = { israeli: 0.0025, irish: 0.0019 } as const;
+/**
+ * Dividend withholding drag inside the fund, per year of fund value
+ * (~1.27% S&P yield × 25% US withholding for an Israeli fund, × 15% for an Irish UCITS ETF).
+ */
+export const DIVIDEND_DRAG = { israeli: 0.0032, irish: 0.0019 } as const;
 
 // ---------------------------------------------------------------------------
 // Input schema
@@ -187,7 +190,7 @@ export const DEFAULT_INPUTS: SimInputs = {
   spFee: 0.15,
   spVehicle: "israeli",
   cashflowMatching: true,
-  inflation: 2.5,
+  inflation: 2.0,
   loanEnabled: false,
   loanAmount: 200_000,
   loanRate: 8,

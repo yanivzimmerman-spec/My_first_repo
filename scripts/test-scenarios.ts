@@ -195,7 +195,7 @@ function checkScenario(inp: SimInputs, r: SimResult) {
 
   // 8. S&P without matching: closed form
   if (!inp.cashflowMatching && !inp.spLoanEnabled) {
-    const drag = inp.spVehicle === "israeli" ? 0.0025 : 0.0019;
+    const drag = inp.spVehicle === "israeli" ? 0.0032 : 0.0019;
     const annual = (1 + inp.spReturn / 100) * (1 - inp.spFee / 100) - 1 - drag;
     const expected = start * Math.pow(1 + annual, inp.years);
     check(near(sp.grossValue, expected, Math.max(1, expected * 1e-9)), "S&P value (closed form, no matching)", ctx);

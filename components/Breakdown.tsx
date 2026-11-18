@@ -99,7 +99,7 @@ export default function Breakdown({ result }: { result: SimResult }) {
         {
           label: "דליפת מס דיבידנדים",
           re: null,
-          sp: sp.vehicle === "israeli" ? "כ-0.25% בשנה" : "כ-0.19% בשנה",
+          sp: sp.vehicle === "israeli" ? "כ-0.32% בשנה" : "כ-0.19% בשנה",
           note: "מנוכה מהתשואה בתוך הקרן",
         },
       ],
