@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Calculator } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { SimResult } from "@/lib/calculator";
 import { formatILS } from "@/lib/format";
 
@@ -86,27 +86,22 @@ export default function Breakdown({ result }: { result: SimResult }) {
   ];
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)]">
+    <div className="rounded-2xl border border-slate-200 bg-white">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 p-4 text-right sm:p-5"
+        className="flex w-full items-center justify-between gap-3 p-5 text-right sm:px-7"
       >
-        <span className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-slate-600">
-            <Calculator size={16} />
-          </span>
-          <span>
-            <span className="block text-base font-bold text-slate-900">איך הגענו למספרים?</span>
-            <span className="block text-xs text-slate-500">פירוט מלא: השקעה, מסים, משכנתא ושווי סופי</span>
-          </span>
+        <span>
+          <span className="block text-lg font-bold text-slate-900">איך הגענו למספרים?</span>
+          <span className="block text-[13px] text-slate-500">פירוט מלא: השקעה, מסים, משכנתא ושווי סופי</span>
         </span>
         <ChevronDown size={20} className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="overflow-x-auto px-2 pb-4 sm:px-5 sm:pb-5">
+        <div className="overflow-x-auto px-3 pb-5 sm:px-7 sm:pb-7">
           <table className="w-full min-w-[460px] text-sm">
             <thead>
               <tr className="text-xs text-slate-500">

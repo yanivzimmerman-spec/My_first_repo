@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Share2, Check, SlidersHorizontal, X, RotateCcw, Sparkles, Info, Building2, LineChart } from "lucide-react";
+import { Share2, Check, RotateCcw } from "lucide-react";
 import { DEFAULT_INPUTS, simulate, type SimInputs } from "@/lib/calculator";
 import { PRESETS } from "@/lib/presets";
 import { inputsToQuery, queryToInputs } from "@/lib/url";
@@ -41,7 +41,6 @@ async function copyText(text: string): Promise<boolean> {
 export default function Simulator() {
   const [inputs, setInputs] = useState<SimInputs>(DEFAULT_INPUTS);
   const [hydrated, setHydrated] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
 
   // Load a shared scenario from the URL once on mount.
@@ -84,154 +83,111 @@ export default function Simulator() {
 
   const activePreset = PRESETS.find((p) => sameInputs(p.inputs, inputs))?.id;
   const isDefault = sameInputs(inputs, DEFAULT_INPUTS);
-  const winColor =
-    result.winner === "realEstate" ? "text-re-ink" : result.winner === "sp500" ? "text-sp-ink" : "text-slate-700";
+
+  const shareLabel = copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "שיתוף התוצאה";
 
   return (
-    <div className="mx-auto max-w-[1280px] pr-[max(16px,env(safe-area-inset-right,0px))] pl-[max(16px,env(safe-area-inset-left,0px))] pb-16 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1180px] pr-[max(16px,env(safe-area-inset-right,0px))] pl-[max(16px,env(safe-area-inset-left,0px))] pb-16 sm:px-6 lg:px-8">
       {/* ---------- Header ---------- */}
-      <header className="flex flex-wrap items-center justify-between gap-3 pt-5 pb-4 sm:pt-8">
-        <div className="flex items-center gap-3">
-          <div className="relative grid h-10 w-10 place-items-center overflow-hidden rounded-xl bg-slate-900 text-white">
-            <Building2 size={18} className="absolute right-1.5 top-1.5 text-indigo-300" />
-            <LineChart size={18} className="absolute bottom-1.5 left-1.5 text-emerald-300" />
-          </div>
-          <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">נדל״ן מול סנופי</h1>
-            <p className="text-xs text-slate-500 sm:text-sm">דירה להשקעה במינוף מול S&P 500 — עם כל המסים בישראל</p>
-          </div>
+      <header className="pt-8 pb-6 sm:pt-12 sm:pb-8">
+        <p className="text-[13px] font-semibold text-slate-500">נדל״ן מול סנופי</p>
+        <h1 className="mt-1 max-w-[22ch] text-[28px] font-bold leading-tight text-slate-900 [text-wrap:balance] sm:text-4xl">
+          מה משתלם יותר: <span className="whitespace-nowrap text-re">דירה להשקעה</span> או <span className="whitespace-nowrap text-sp-ink">S&P 500</span>?
+        </h1>
+        <p className="mt-3 max-w-[60ch] text-[15px] leading-relaxed text-slate-600 sm:text-base">
+          הזיזו את הנתונים וקבלו תשובה מיידית: כמה כסף יישאר לכם בכל מסלול, אחרי מס רכישה, מס שבח, מס על השכירות ומס
+          רווחי הון.
+        </p>
+
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <span className="text-[13px] text-slate-500">נסו תרחיש:</span>
+          {PRESETS.map((p) => {
+            const active = activePreset === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setInputs(p.inputs)}
+                aria-pressed={active}
+                title={p.description}
+                className={`rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition ${
+                  active
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+          {!isDefault && (
+            <button
+              type="button"
+              onClick={() => setInputs(DEFAULT_INPUTS)}
+              className="flex items-center gap-1 px-2 py-1.5 text-[13px] text-slate-500 hover:text-slate-900"
+            >
+              <RotateCcw size={13} /> איפוס
+            </button>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={share}
-          className="hidden items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 active:scale-[0.98] sm:flex"
-        >
-          {copied === "ok" ? <Check size={16} /> : <Share2 size={16} />}
-          {copied === "ok" ? "הועתק ללוח!" : copied === "fail" ? "ההעתקה נכשלה" : "שתף תוצאה"}
-        </button>
       </header>
 
-      {/* ---------- Presets ---------- */}
-      <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-slate-500">
-          <Sparkles size={14} /> תרחישים מהירים:
-        </span>
-        {PRESETS.map((p) => {
-          const active = activePreset === p.id;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setInputs(p.inputs)}
-              aria-pressed={active}
-              className={`shrink-0 rounded-xl border px-3.5 py-2 text-right transition ${
-                active
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-              }`}
-            >
-              <span className="block text-sm font-semibold">{p.label}</span>
-              <span className={`block text-[11px] ${active ? "text-slate-300" : "text-slate-500"}`}>{p.description}</span>
-            </button>
-          );
-        })}
-        {!isDefault && (
-          <button
-            type="button"
-            onClick={() => setInputs(DEFAULT_INPUTS)}
-            className="flex shrink-0 items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800"
-          >
-            <RotateCcw size={13} /> איפוס
-          </button>
-        )}
-      </div>
-
-      {/* ---------- Mobile sticky summary bar ---------- */}
-      <div className="sticky top-[env(safe-area-inset-top,0px)] z-30 -mx-4 mb-4 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur lg:hidden">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className={`truncate text-sm font-bold ${winColor}`}>
-              {result.winner === "tie"
-                ? "תיקו"
-                : `${result.winner === "realEstate" ? "נדל״ן" : "S&P 500"} מנצח ב-${formatCompactILS(result.difference)}`}
-            </p>
-            <p className="flex gap-3 whitespace-nowrap text-xs tabular-nums text-slate-500">
-              <span>
-                <span className="inline-block h-2 w-2 rounded-full bg-re" /> {formatCompactILS(result.realEstate.netWorth)}
-              </span>
-              <span>
-                <span className="inline-block h-2 w-2 rounded-full bg-sp" /> {formatCompactILS(result.sp500.netWorth)}
-              </span>
-              <span>
-                {formatCompactILS(inputs.equity)} · {inputs.years} שנה
-              </span>
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={share}
-            aria-label="שתף תוצאה"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700"
-          >
-            {copied === "ok" ? <Check size={16} /> : <Share2 size={16} />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-expanded={mobileOpen}
-            aria-controls="controls"
-            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
-          >
-            {mobileOpen ? <X size={14} /> : <SlidersHorizontal size={14} />}
-            {mobileOpen ? "סגור" : "עריכת הנחות"}
-          </button>
+      {/* ---------- Mobile: compact answer that stays on screen while editing ---------- */}
+      <div className="sticky top-[env(safe-area-inset-top,0px)] z-30 -mx-4 mb-4 border-b border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur lg:hidden">
+        <div className="flex items-center justify-between gap-3 text-[13px] tabular-nums">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-re" /> דירה{" "}
+            <span className="font-semibold text-slate-900">{formatCompactILS(result.realEstate.netWorth)}</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-sp" /> S&P{" "}
+            <span className="font-semibold text-slate-900">{formatCompactILS(result.sp500.netWorth)}</span>
+          </span>
+          <span className="text-slate-500">{inputs.years} שנה</span>
         </div>
       </div>
 
-      {/* ---------- Main grid (RTL: controls on the right) ---------- */}
-      <div className="grid gap-5 lg:grid-cols-[400px_minmax(0,1fr)] lg:items-start lg:gap-6">
+      {/*
+        Layout: phone = answer → inputs → chart → details (one column).
+        Desktop (RTL) = inputs in a sticky right column, results on the left.
+      */}
+      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:gap-8">
+        <div className="min-w-0 lg:col-start-2 lg:row-start-1">
+          <VerdictBanner result={result} />
+        </div>
+
         <aside
-          id="controls"
-          aria-label="הנחות הסימולציה"
-          className={`${mobileOpen ? "block" : "hidden"} lg:sticky lg:top-4 lg:block lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pb-2 lg:[scrollbar-width:thin]`}
+          aria-label="הנתונים שלכם"
+          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
         >
           <ControlPanel inputs={inputs} result={result} set={set} />
-          <button
-            type="button"
-            onClick={() => {
-              setMobileOpen(false);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            className="mt-4 w-full rounded-xl bg-slate-900 py-3 text-sm font-semibold text-white lg:hidden"
-          >
-            הצג תוצאות
-          </button>
         </aside>
 
-        <main className="min-w-0 space-y-5">
-          <VerdictBanner result={result} />
+        <div className="min-w-0 lg:col-start-2">
           <GrowthChart result={result} />
+        </div>
+
+        <div className="min-w-0 space-y-5 lg:col-start-2">
           <Breakdown result={result} />
 
-          <button
-            type="button"
-            onClick={share}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 sm:hidden"
-          >
-            {copied === "ok" ? <Check size={16} /> : <Share2 size={16} />}
-            {copied === "ok" ? "הועתק ללוח!" : "שתף תוצאה"}
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
+            <button
+              type="button"
+              onClick={share}
+              className="flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+            >
+              {copied === "ok" ? <Check size={16} /> : <Share2 size={16} />}
+              {shareLabel}
+            </button>
+            <span className="text-[13px] text-slate-500">מעתיק סיכום של התוצאה לשליחה</span>
+          </div>
 
-          <footer className="flex gap-2.5 rounded-2xl border border-slate-200/80 bg-white/60 p-4 text-xs leading-relaxed text-slate-500">
-            <Info size={16} className="mt-0.5 shrink-0 text-slate-400" />
-            <p>
-              <span className="font-semibold text-slate-700">גילוי נאות: </span>
-              זוהי סימולציה פיננסית לצורכי המחשה בלבד, המבוססת על הנחות קבועות ומפושטות (תשואות, ריביות ואינפלציה קבועות לאורך
-              כל התקופה). אין לראות בה ייעוץ השקעות, ייעוץ מס או המלצה לפעולה, ואין בה תחליף לייעוץ מותאם אישית מגורם מוסמך.
-              תשואות עבר אינן מבטיחות תשואות עתידיות. מדרגות המס הן הערכה ועשויות להשתנות.
-            </p>
-          </footer>
-        </main>
+          <p className="border-t border-slate-200 pt-5 text-[12px] leading-relaxed text-slate-500">
+            זוהי סימולציה לצורכי המחשה בלבד, המבוססת על הנחות קבועות ומפושטות (תשואות, ריביות ואינפלציה קבועות לאורך כל
+            התקופה). אין לראות בה ייעוץ השקעות, ייעוץ מס או המלצה לפעולה. תשואות עבר אינן מבטיחות תשואות עתידיות. מדרגות המס
+            הן הערכה ועשויות להשתנות.
+          </p>
+        </div>
       </div>
     </div>
   );

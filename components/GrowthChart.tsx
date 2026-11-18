@@ -79,11 +79,11 @@ export default function GrowthChart({ result }: { result: SimResult }) {
   const tickInterval = points.length > 21 ? 4 : points.length > 11 ? 1 : 0;
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:p-5">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-bold text-slate-900">שווי נטו לאורך זמן</h3>
-          <p className="mt-0.5 text-xs text-slate-500">כמה היה נשאר בכיס אילו הכול היה נמכר בסוף כל שנה (אחרי מסים ומשכנתא)</p>
+          <h3 className="text-lg font-bold text-slate-900">שווי נטו לאורך השנים</h3>
+          <p className="mt-0.5 text-[13px] text-slate-500">כמה היה נשאר בכיס אילו הכול היה נמכר בסוף כל שנה (אחרי מסים ומשכנתא)</p>
         </div>
         <div className="flex rounded-lg bg-slate-100 p-0.5" role="tablist" aria-label="תצוגה">
           {(
@@ -132,11 +132,11 @@ export default function GrowthChart({ result }: { result: SimResult }) {
             <AreaChart data={points} margin={{ top: 16, right: 4, left: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="gRE" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={RE} stopOpacity={0.18} />
+                  <stop offset="0%" stopColor={RE} stopOpacity={0.08} />
                   <stop offset="100%" stopColor={RE} stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gSP" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={SP} stopOpacity={0.18} />
+                  <stop offset="0%" stopColor={SP} stopOpacity={0.08} />
                   <stop offset="100%" stopColor={SP} stopOpacity={0} />
                 </linearGradient>
               </defs>

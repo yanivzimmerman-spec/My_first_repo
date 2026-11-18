@@ -12,11 +12,10 @@ interface Props {
   bound: Bound;
   onChange: (v: number) => void;
   kind: Kind;
-  icon?: ReactNode;
   hint?: ReactNode;
+  /** Track color: slider fill and value pill */
   accent?: string;
   disabled?: boolean;
-  highlight?: boolean;
   decimals?: number;
 }
 
@@ -26,17 +25,16 @@ function display(v: number, kind: Kind, decimals: number) {
   return String(Math.round(v));
 }
 
+/** One input row: label, tappable value pill (type an exact number), slider. */
 export default function SliderInput({
   label,
   value,
   bound,
   onChange,
   kind,
-  icon,
   hint,
   accent = "#0F172A",
   disabled,
-  highlight,
   decimals = 2,
 }: Props) {
   const id = useId();
@@ -49,35 +47,28 @@ export default function SliderInput({
     setDraft(null);
   };
 
-  const unit = kind === "currency" ? "₪" : kind === "percent" ? "%" : "שנים";
+  const prefix = kind === "currency" ? "₪" : "";
+  const suffix = kind === "percent" ? "%" : kind === "years" ? " שנים" : "";
+  const width = kind === "currency" ? "w-[78px]" : kind === "years" ? "w-[24px]" : "w-[40px]";
 
   return (
     <div className={disabled ? "opacity-50" : ""}>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <label
-          htmlFor={id}
-          className={`flex items-center gap-1.5 text-slate-700 ${highlight ? "text-[15px] font-semibold" : "text-sm font-medium"}`}
-        >
-          {icon && <span className="text-slate-400">{icon}</span>}
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <label htmlFor={id} className="text-[15px] text-slate-700">
           {label}
         </label>
         <div
           dir="ltr"
-          className={`flex items-center gap-1 rounded-lg border bg-white px-2 focus-within:ring-2 focus-within:ring-slate-900/10 ${
-            highlight ? "border-slate-300 py-1.5" : "border-slate-200 py-1"
-          }`}
+          className="flex items-center rounded-full px-3 py-1 text-[15px] font-semibold tabular-nums ring-1 ring-transparent transition focus-within:ring-2"
+          style={{ background: `${accent}12`, color: accent, ["--tw-ring-color" as string]: `${accent}55` }}
         >
-          {kind === "currency" && <span className="text-xs text-slate-400">{unit}</span>}
+          {prefix && <span>{prefix}</span>}
           <input
             id={id}
             type="text"
             inputMode="decimal"
-            dir="ltr"
             disabled={disabled}
-            aria-label={label}
-            className={`bg-transparent text-left font-semibold tabular-nums text-slate-900 outline-none ${
-              highlight ? "text-base" : "text-sm"
-            } ${kind === "currency" ? "w-[84px]" : kind === "years" ? "w-[28px]" : "w-[44px]"}`}
+            className={`${width} bg-transparent text-left outline-none`}
             value={draft ?? display(value, kind, decimals)}
             onFocus={(e) => {
               setDraft(display(value, kind, decimals).replace(/,/g, ""));
@@ -93,7 +84,7 @@ export default function SliderInput({
               }
             }}
           />
-          {kind !== "currency" && <span className="text-xs text-slate-400">{unit}</span>}
+          {suffix && <span className="whitespace-pre">{suffix}</span>}
         </div>
       </div>
       <input
@@ -108,7 +99,7 @@ export default function SliderInput({
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ ["--pct" as string]: `${Math.min(100, Math.max(0, pct))}%`, ["--accent" as string]: accent }}
       />
-      {hint && <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{hint}</p>}
+      {hint && <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{hint}</p>}
     </div>
   );
 }

@@ -1,28 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Wallet,
-  CalendarRange,
-  Building2,
-  Percent,
-  Home,
-  TrendingUp,
-  LineChart,
-  Coins,
-  ArrowLeftRight,
-  ChevronDown,
-  Settings2,
-  AlertTriangle,
-  Wand2,
-} from "lucide-react";
+import { ChevronDown, AlertTriangle } from "lucide-react";
 import { BOUNDS, type SimInputs, type SimResult } from "@/lib/calculator";
 import { formatILS, formatPct } from "@/lib/format";
 import SliderInput from "./SliderInput";
 import { Segmented, Switch } from "./Toggle";
 
 const RE = "#4F46E5";
-const SP = "#10B981";
+const SP = "#059669";
 
 interface Props {
   inputs: SimInputs;
@@ -30,29 +16,14 @@ interface Props {
   set: <K extends keyof SimInputs>(key: K, value: SimInputs[K]) => void;
 }
 
-function Section({
-  title,
-  icon,
-  color,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  color?: string;
-  children: React.ReactNode;
-}) {
+function Group({ title, color, children }: { title: string; color?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgb(15_23_42/0.04)] sm:p-5">
-      <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900">
-        <span
-          className="grid h-7 w-7 place-items-center rounded-lg"
-          style={{ background: color ? `${color}14` : "#F1F5F9", color: color ?? "#334155" }}
-        >
-          {icon}
-        </span>
+    <section className="border-t border-slate-100 px-5 py-6 first:border-t-0 sm:px-6">
+      <h2 className="mb-5 flex items-center gap-2 text-[13px] font-semibold text-slate-500">
+        {color && <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />}
         {title}
-      </h3>
-      <div className="space-y-5">{children}</div>
+      </h2>
+      <div className="space-y-6">{children}</div>
     </section>
   );
 }
@@ -62,65 +33,46 @@ export default function ControlPanel({ inputs, result, set }: Props) {
   const re = result.realEstate;
 
   return (
-    <div className="space-y-4">
-      {/* 1. Primary inputs */}
-      <section className="rounded-2xl border-2 border-slate-900/90 bg-white p-4 shadow-sm sm:p-5">
-        <div className="space-y-5">
-          <SliderInput
-            highlight
-            label="הון עצמי פנוי"
-            icon={<Wallet size={16} />}
-            kind="currency"
-            value={inputs.equity}
-            bound={BOUNDS.equity}
-            onChange={(v) => set("equity", v)}
-          />
-          <SliderInput
-            highlight
-            label="טווח השקעה"
-            icon={<CalendarRange size={16} />}
-            kind="years"
-            value={inputs.years}
-            bound={BOUNDS.years}
-            onChange={(v) => set("years", Math.round(v))}
-          />
-        </div>
-      </section>
-
-      {/* 2. Real-estate track */}
-      <Section title="מסלול דירה להשקעה" icon={<Building2 size={16} />} color={RE}>
-        <Segmented
-          ariaLabel="סוג הדירה"
-          accent={RE}
-          value={inputs.isFirstApartment ? "first" : "additional"}
-          onChange={(v) => set("isFirstApartment", v === "first")}
-          options={[
-            { value: "first", label: "דירה יחידה" },
-            { value: "additional", label: "דירה נוספת" },
-          ]}
+    <div className="rounded-2xl border border-slate-200 bg-white">
+      <Group title="הנתונים שלכם">
+        <SliderInput
+          label="הון עצמי פנוי"
+          kind="currency"
+          value={inputs.equity}
+          bound={BOUNDS.equity}
+          onChange={(v) => set("equity", v)}
         />
-        <p className="-mt-2 text-xs leading-relaxed text-slate-500">
-          {inputs.isFirstApartment
-            ? "מס רכישה לפי מדרגות דירה יחידה (0% עד ₪1.98M) · פטור ממס שבח במכירה."
-            : "מס רכישה 8% מהשקל הראשון · מס שבח 25% על הרווח הריאלי במכירה."}
-        </p>
+        <SliderInput
+          label="לכמה שנים?"
+          kind="years"
+          value={inputs.years}
+          bound={BOUNDS.years}
+          onChange={(v) => set("years", Math.round(v))}
+        />
+      </Group>
+
+      <Group title="דירה להשקעה" color={RE}>
+        <div>
+          <Segmented
+            ariaLabel="סוג הדירה"
+            accent={RE}
+            value={inputs.isFirstApartment ? "first" : "additional"}
+            onChange={(v) => set("isFirstApartment", v === "first")}
+            options={[
+              { value: "first", label: "דירה יחידה" },
+              { value: "additional", label: "דירה נוספת" },
+            ]}
+          />
+          <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+            {inputs.isFirstApartment
+              ? "מס רכישה מופחת ופטור ממס שבח במכירה."
+              : "מס רכישה 8% ומס שבח 25% על הרווח הריאלי."}
+          </p>
+        </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-              <Wand2 size={14} />
-              חישוב אוטומטי (הון עצמי ÷ 25%)
-            </span>
-            <Switch
-              label="חישוב שווי נכס אוטומטי"
-              checked={inputs.autoPrice}
-              onChange={(v) => set("autoPrice", v)}
-              accent={RE}
-            />
-          </div>
           <SliderInput
-            label="שווי הנכס הנרכש"
-            icon={<Home size={15} />}
+            label="מחיר הדירה"
             kind="currency"
             value={re.propertyPrice}
             bound={BOUNDS.propertyPrice}
@@ -129,51 +81,54 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             onChange={(v) => set("propertyPrice", v)}
             hint={
               <>
-                מס רכישה {formatILS(re.purchaseTax)} + עלויות נלוות 2% {formatILS(re.closingCosts)} · משכנתא{" "}
-                <span className="font-semibold text-slate-700">{formatILS(re.loanAmount)}</span> (מימון{" "}
-                {formatPct(re.ltv * 100, 0)})
+                משכנתא: <span className="font-medium text-slate-700">{formatILS(re.loanAmount)}</span> (
+                {formatPct(re.ltv * 100, 0)} מימון) · מס רכישה ועלויות: {formatILS(re.purchaseTax + re.closingCosts)}
               </>
             }
           />
+          <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 text-[13px] text-slate-600">
+            <span>חשבו לי את המחיר לפי 25% הון עצמי</span>
+            <Switch
+              label="חישוב מחיר אוטומטי"
+              checked={inputs.autoPrice}
+              onChange={(v) => set("autoPrice", v)}
+              accent={RE}
+            />
+          </label>
           {(re.ltvExceeded || re.equityShortfall) && (
-            <div className="mt-2 flex gap-2 rounded-lg bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-900">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+            <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-900">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <span>
                 {re.equityShortfall
-                  ? "ההון העצמי לא מכסה אפילו את מס הרכישה והעלויות הנלוות. הקטינו את שווי הנכס."
-                  : `שיעור המימון (${formatPct(re.ltv * 100, 0)}) גבוה מהמקסימום שבנק ישראל מתיר ל${
-                      inputs.isFirstApartment ? "דירה יחידה (75%)" : "דירה נוספת (50%)"
-                    }. בפועל הבנק לא יאשר משכנתא כזו.`}
+                  ? "ההון העצמי לא מכסה את מס הרכישה והעלויות. בחרו דירה זולה יותר."
+                  : `הבנק לא יאשר מימון של ${formatPct(re.ltv * 100, 0)}. המקסימום ל${
+                      inputs.isFirstApartment ? "דירה יחידה הוא 75%" : "דירה נוספת הוא 50%"
+                    }.`}
               </span>
             </div>
           )}
         </div>
 
         <SliderInput
-          label="ריבית משכנתא ממוצעת"
-          icon={<Percent size={15} />}
+          label="ריבית משכנתא"
           kind="percent"
           value={inputs.mortgageRate}
           bound={BOUNDS.mortgageRate}
           accent={RE}
           onChange={(v) => set("mortgageRate", v)}
-          hint={`החזר חודשי (שפיצר, ${inputs.mortgageTerm} שנה): ${formatILS(re.monthlyMortgagePayment)}`}
+          hint={`החזר חודשי: ${formatILS(re.monthlyMortgagePayment)}`}
         />
         <SliderInput
-          label="תשואת שכירות שנתית נטו"
-          icon={<Coins size={15} />}
+          label="תשואת שכירות שנתית"
           kind="percent"
           value={inputs.rentalYield}
           bound={BOUNDS.rentalYield}
           accent={RE}
           onChange={(v) => set("rentalYield", v)}
-          hint={`שכ״ד חודשי בשנה הראשונה: ${formatILS(re.initialMonthlyRentGross)} (אחרי חודש פנוי/תחזוקה)${
-            re.initialMonthlyRentGross > re.initialMonthlyRentNet + 0.5 ? " · חייב במס 10%" : " · פטור ממס"
-          }`}
+          hint={`שכר דירה: ${formatILS(re.initialMonthlyRentGross)} לחודש (נטו, אחרי חודש פנוי ותחזוקה)`}
         />
         <SliderInput
-          label="עליית ערך שנתית צפויה"
-          icon={<TrendingUp size={15} />}
+          label="עליית ערך שנתית"
           kind="percent"
           decimals={1}
           value={inputs.appreciation}
@@ -181,76 +136,62 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           accent={RE}
           onChange={(v) => set("appreciation", v)}
         />
-      </Section>
+      </Group>
 
-      {/* 3. S&P track */}
-      <Section title="מסלול S&P 500" icon={<LineChart size={16} />} color={SP}>
+      <Group title="S&P 500" color={SP}>
         <SliderInput
           label="תשואה שנתית ממוצעת"
-          icon={<TrendingUp size={15} />}
           kind="percent"
           decimals={1}
           value={inputs.spReturn}
           bound={BOUNDS.spReturn}
           accent={SP}
           onChange={(v) => set("spReturn", v)}
-          hint="ממוצע היסטורי נומינלי (כולל דיבידנדים) ≈ 9.5%–10%"
+          hint="הממוצע ההיסטורי הוא כ-9.5% בשנה"
         />
         <SliderInput
-          label="דמי ניהול שנתיים"
-          icon={<Percent size={15} />}
+          label="דמי ניהול"
           kind="percent"
           value={inputs.spFee}
           bound={BOUNDS.spFee}
           accent={SP}
           onChange={(v) => set("spFee", v)}
-          hint="קרן אירית / קרן מחקה ישראלית: 0.07%–0.25%"
         />
-        <div className="rounded-xl bg-emerald-50/70 p-3.5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-              <ArrowLeftRight size={15} className="text-sp-ink" />
-              הפקדה חודשית משלימה
-            </span>
+        <div>
+          <label className="flex cursor-pointer items-center justify-between gap-3">
+            <span className="text-[15px] text-slate-700">השקעת ההפרש החודשי</span>
             <Switch
-              label="הפקדה חודשית משלימה"
+              label="השקעת ההפרש החודשי"
               checked={inputs.cashflowMatching}
               onChange={(v) => set("cashflowMatching", v)}
               accent={SP}
             />
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-slate-600">
-            כדי שההשוואה תהיה הוגנת, אם החזר המשכנתא גבוה מהשכירות, ההפרש החודשי מושקע אוטומטית ב-S&P 500. אם
-            השכירות גבוהה מההחזר — העודף מושקע במדד בתוך מסלול הנדל״ן.
-          </p>
-          <p className="mt-2 text-xs font-medium text-slate-700">
-            {re.initialMonthlyGap > 0.5
-              ? `כרגע: ${formatILS(re.initialMonthlyGap)} בחודש מהכיס → ל-S&P`
-              : re.initialMonthlyGap < -0.5
-                ? `כרגע: עודף שכירות של ${formatILS(-re.initialMonthlyGap)} בחודש`
-                : "כרגע: השכירות מכסה בדיוק את ההחזר"}
+          </label>
+          <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+            כדי שההשוואה תהיה הוגנת, אם החזר המשכנתא גבוה מהשכירות, ההפרש החודשי מושקע אוטומטית ב-S&P 500
+            {re.initialMonthlyGap > 0.5 && (
+              <>
+                {" "}
+                (כרגע <span className="font-medium text-slate-700">{formatILS(re.initialMonthlyGap)}</span> בחודש)
+              </>
+            )}
+            .
           </p>
         </div>
-      </Section>
+      </Group>
 
-      {/* 4. Advanced */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)]">
+      <section className="border-t border-slate-100">
         <button
           type="button"
           onClick={() => setAdvanced((v) => !v)}
           aria-expanded={advanced}
-          className="flex w-full items-center justify-between p-4 text-sm font-bold text-slate-900 sm:px-5"
+          className="flex w-full items-center justify-between px-5 py-4 text-[13px] font-semibold text-slate-500 hover:text-slate-800 sm:px-6"
         >
-          <span className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-600">
-              <Settings2 size={16} />
-            </span>
-            הנחות מתקדמות
-          </span>
-          <ChevronDown size={18} className={`text-slate-400 transition-transform ${advanced ? "rotate-180" : ""}`} />
+          הנחות נוספות
+          <ChevronDown size={16} className={`transition-transform ${advanced ? "rotate-180" : ""}`} />
         </button>
         {advanced && (
-          <div className="space-y-5 px-4 pb-5 sm:px-5">
+          <div className="space-y-6 px-5 pb-6 sm:px-6">
             <SliderInput
               label="אינפלציה שנתית"
               kind="percent"
@@ -258,7 +199,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               value={inputs.inflation}
               bound={BOUNDS.inflation}
               onChange={(v) => set("inflation", v)}
-              hint="משמשת לחישוב רווח ריאלי (מס שבח ומס רווחי הון) ולהצמדת תקרת הפטור על שכירות"
+              hint="משמשת לחישוב המס על הרווח הריאלי"
             />
             <SliderInput
               label="תקופת המשכנתא"
