@@ -24,6 +24,13 @@ const SHEVACH_SINGLE_CEILING = 5_008_000;
 const SURTAX_THRESHOLD = 721_560;
 const RENT_CEILING = 5_654;
 
+/** Independent: own money at the start = cash + (upgrader) old home price − 2.95%/0.59% fees − its mortgage. */
+function expectedStart(inp: SimInputs): number {
+  if (inp.apartmentType !== "upgrader") return inp.equity;
+  const fee = (inp.useBroker ? 0.025 : 0.005) * 1.18;
+  return inp.equity + Math.max(0, inp.oldHomeValue * (1 - fee) - Math.min(inp.oldHomeMortgage, inp.oldHomeValue));
+}
+
 /** Independent month-1 rent after vacancy, rent tax (cheaper track), 8% maintenance, ₪150 insurance. */
 function expectedNetRent(price: number, yieldPct: number): number {
   const gross = (price * yieldPct) / 100 / 12;
@@ -39,8 +46,14 @@ function expectedNetRent(price: number, yieldPct: number): number {
 const TYPES: ApartmentType[] = ["single", "upgrader", "additional"];
 const VEHICLES: SpVehicle[] = ["israeli", "irish"];
 const BOOLS = [false, true];
-const EQUITY = [200_000, 350_000, 600_000, 1_500_000, 3_000_000];
+const EQUITY = [0, 200_000, 350_000, 600_000, 1_500_000, 3_000_000]; // 0 → raised to the ₪200K minimum
 const YEARS = [5, 15, 30];
+// Upgrader: cheap home fully mortgaged (no proceeds, cash topped up to ₪200K), mid home, expensive home above the exemption ceiling
+const OLD_HOMES: Partial<SimInputs>[] = [
+  { oldHomeValue: 600_000, oldHomeMortgage: 600_000 },
+  { oldHomeValue: 2_000_000, oldHomeMortgage: 500_000 },
+  { oldHomeValue: 6_000_000, oldHomeMortgage: 0 },
+];
 const MARKETS: Record<string, Partial<SimInputs>> = {
   low: { mortgageRate: 2.5, rentalYield: 2.2, rentGrowth: 1, appreciation: 1, spReturn: 5, spFee: 0.05, inflation: 1 },
   base: {},
@@ -81,7 +94,10 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   const re = r.realEstate;
   const sp = r.sp500;
   const ctx = () => JSON.stringify(inp);
-  const cash = inp.equity + (inp.loanEnabled ? inp.loanAmount : 0);
+  const start = expectedStart(inp);
+  check(near(re.startCapital, start, 0.01) && near(sp.initialInvestment, start, 0.01), "start capital = cash + net old-home proceeds", ctx);
+  check(start >= 200_000 - 0.01, "start capital ≥ ₪200K", ctx);
+  const cash = start + (inp.loanEnabled ? inp.loanAmount : 0);
   const months = inp.years * 12;
 
   // 1. Everything finite
@@ -144,9 +160,9 @@ function checkScenario(inp: SimInputs, r: SimResult) {
 
   // 5. Year 0 values
   const p0 = r.points[0];
-  const re0 = inp.equity - re.purchaseTax - re.closingCosts - re.propertyPrice * sellingCostRate(inp.useBroker);
+  const re0 = start - re.purchaseTax - re.closingCosts - re.propertyPrice * sellingCostRate(inp.useBroker);
   check(near(p0.realEstate, re0, 1), "year 0: apartment = equity − tax − buy/sell costs", ctx);
-  check(near(p0.sp500, inp.equity, 0.01), "year 0: S&P = equity", ctx);
+  check(near(p0.sp500, start, 0.01), "year 0: S&P = start capital", ctx);
   check(r.points.length === inp.years + 1, "one point per year", ctx);
 
   // 6. Fairness: with matching, both tracks invest the same own cash
@@ -166,7 +182,7 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   const nominalGain = Math.max(0, re.finalPropertyValue - re.sellingCosts - re.propertyPrice - re.purchaseTax - re.closingCosts);
   check(re.shevachTax <= CAPITAL_GAINS_TAX_RATE * nominalGain + 0.01, "מס שבח ≤ 25% of nominal gain", ctx);
   // Cost basis = own money + borrowed money invested + matching deposits
-  const spBasisNominal = inp.equity + sp.loanPrincipal + (inp.cashflowMatching ? sp.monthlyContributionsTotal - sumSpLoanPayments(inp, months) : 0);
+  const spBasisNominal = start + sp.loanPrincipal + (inp.cashflowMatching ? sp.monthlyContributionsTotal - sumSpLoanPayments(inp, months) : 0);
   check(sp.capitalGainsTax <= CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - spBasisNominal) + 0.01 || inp.spVehicle === "irish", "S&P tax ≤ 25% of nominal gain (Israeli fund)", ctx);
   if (inp.spVehicle === "irish") {
     check(near(sp.capitalGainsTax, CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - spBasisNominal), 1), "Irish ETF: 25% of nominal gain", ctx);
@@ -178,7 +194,7 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   if (!inp.cashflowMatching && !inp.spLoanEnabled) {
     const drag = inp.spVehicle === "israeli" ? 0.0025 : 0.0019;
     const annual = (1 + inp.spReturn / 100) * (1 - inp.spFee / 100) - 1 - drag;
-    const expected = inp.equity * Math.pow(1 + annual, inp.years);
+    const expected = start * Math.pow(1 + annual, inp.years);
     check(near(sp.grossValue, expected, Math.max(1, expected * 1e-9)), "S&P value (closed form, no matching)", ctx);
   }
 
@@ -210,7 +226,8 @@ for (const apartmentType of TYPES)
           for (const autoPrice of BOOLS)
             for (const equity of EQUITY)
               for (const years of YEARS)
-                for (const [, market] of Object.entries(MARKETS)) {
+                for (const [, market] of Object.entries(MARKETS))
+                 for (const oldHome of apartmentType === "upgrader" ? OLD_HOMES : [{}]) {
                   const inp: SimInputs = {
                     ...DEFAULT_INPUTS,
                     ...market,
@@ -224,6 +241,7 @@ for (const apartmentType of TYPES)
                     equity,
                     years,
                     mortgageTerm: years === 30 ? 20 : 25, // also cover "mortgage paid off before the end"
+                    ...oldHome,
                   };
                   const r = simulate(inp);
                   checkScenario(r.inputs, r);
@@ -231,7 +249,8 @@ for (const apartmentType of TYPES)
                 }
 
 // --- Monotonicity (one input changes, all else fixed, price below every cap) --
-const base: SimInputs = { ...DEFAULT_INPUTS, equity: 1_500_000, propertyPrice: 1_500_000 };
+// Old home fully mortgaged → no proceeds, so every type starts with the same ₪1.5M.
+const base: SimInputs = { ...DEFAULT_INPUTS, equity: 1_500_000, propertyPrice: 1_500_000, oldHomeValue: 600_000, oldHomeMortgage: 600_000 };
 function mono(rule: string, key: keyof SimInputs, lo: number, hi: number, pick: (r: SimResult) => number, dir: 1 | -1) {
   for (const apartmentType of TYPES)
     for (const cashflowMatching of BOOLS) {

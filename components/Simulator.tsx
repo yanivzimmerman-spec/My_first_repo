@@ -73,7 +73,7 @@ export default function Simulator() {
       `נדל״ן מול סנופי — ${verdictText(result)}`,
       `🏠 דירה להשקעה: ${formatILS(result.realEstate.netWorth)} נטו`,
       `📈 S&P 500: ${formatILS(result.sp500.netWorth)} נטו`,
-      `(הון עצמי ${formatILS(inputs.equity)}, ${{ single: "דירה יחידה", upgrader: "משפרי דיור", additional: "דירה נוספת" }[inputs.apartmentType]}${inputs.loanEnabled ? `, הלוואה לדירה ${formatILS(inputs.loanAmount)}` : ""}${inputs.spLoanEnabled ? `, הלוואה להשקעה ${formatILS(inputs.spLoanAmount)}` : ""}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
+      `(הון עצמי ${formatILS(result.realEstate.startCapital)}${result.realEstate.oldHomeNetProceeds > 0 ? " כולל מכירת הדירה הקיימת" : ""}, ${{ single: "דירה יחידה", upgrader: "משפרי דיור", additional: "דירה נוספת" }[inputs.apartmentType]}${inputs.loanEnabled ? `, הלוואה לדירה ${formatILS(inputs.loanAmount)}` : ""}${inputs.spLoanEnabled ? `, הלוואה להשקעה ${formatILS(inputs.spLoanAmount)}` : ""}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
       ...(STANDALONE ? [] : [url]),
     ]
       .join("\n")

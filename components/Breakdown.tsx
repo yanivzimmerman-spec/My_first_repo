@@ -33,7 +33,18 @@ export default function Breakdown({ result }: { result: SimResult }) {
     {
       title: "כסף שהושקע",
       lines: [
-        { label: "הון עצמי התחלתי", re: result.inputs.equity, sp: sp.initialInvestment },
+        ...(re.oldHomeNetProceeds > 0
+          ? [
+              { label: "כסף מזומן", re: result.inputs.equity, sp: result.inputs.equity } as Line,
+              {
+                label: "מכירת הדירה הקיימת (נטו)",
+                re: re.oldHomeNetProceeds,
+                sp: re.oldHomeNetProceeds,
+                note: "מחיר פחות עמלות ויתרת המשכנתא, בשני המסלולים",
+              } as Line,
+            ]
+          : []),
+        { label: "הון עצמי התחלתי", re: re.startCapital, sp: sp.initialInvestment },
         ...(loan
           ? [{ label: "הלוואה להון העצמי", re: re.extraLoanPrincipal, sp: null, note: "כסף מושאל, לא נספר כהשקעה שלכם" } as Line]
           : []),

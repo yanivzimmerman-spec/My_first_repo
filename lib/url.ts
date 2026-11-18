@@ -3,6 +3,8 @@ import { DEFAULT_INPUTS, sanitizeInputs, type SimInputs } from "./calculator";
 /** Short, stable URL keys for sharing a scenario. */
 const KEYS: Record<keyof SimInputs, string> = {
   equity: "e",
+  oldHomeValue: "ov",
+  oldHomeMortgage: "om",
   years: "y",
   propertyPrice: "p",
   autoPrice: "ap",

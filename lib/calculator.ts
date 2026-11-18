@@ -79,6 +79,9 @@ export type SpVehicle = "israeli" | "irish";
 
 export interface SimInputs {
   equity: number;
+  /** Upgrader only: value of the apartment being sold, and the mortgage left on it */
+  oldHomeValue: number;
+  oldHomeMortgage: number;
   years: number;
   propertyPrice: number;
   autoPrice: boolean;
@@ -118,7 +121,9 @@ export interface Bound {
 }
 
 export const BOUNDS: Record<NumericKey, Bound> = {
-  equity: { min: 200_000, max: 3_000_000, step: 10_000 },
+  equity: { min: 0, max: 3_000_000, step: 10_000 },
+  oldHomeValue: { min: 500_000, max: 8_000_000, step: 10_000 },
+  oldHomeMortgage: { min: 0, max: 8_000_000, step: 10_000 },
   years: { min: 5, max: 30, step: 1 },
   propertyPrice: { min: 300_000, max: 5_000_000, step: 10_000 },
   mortgageRate: { min: 1, max: 9, step: 0.05 },
@@ -139,6 +144,8 @@ export const BOUNDS: Record<NumericKey, Bound> = {
 
 export const DEFAULT_INPUTS: SimInputs = {
   equity: 600_000,
+  oldHomeValue: 2_000_000,
+  oldHomeMortgage: 500_000,
   years: 15,
   propertyPrice: 2_000_000,
   autoPrice: false,
@@ -182,6 +189,12 @@ export interface YearPoint {
 
 export interface RealEstateSummary {
   apartmentType: ApartmentType;
+  /** Own money at the start (cash + net proceeds from the old home) */
+  startCapital: number;
+  oldHomeNetProceeds: number;
+  oldHomeSellingCosts: number;
+  /** Old home value is above the sole-apartment exemption ceiling (partial tax not modelled) */
+  oldHomeAboveCeiling: boolean;
   propertyPrice: number;
   purchaseTax: number;
   closingCosts: number;
@@ -308,6 +321,9 @@ export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApa
   }
   const v = raw.spVehicle;
   if (v === "israeli" || v === "irish") out.spVehicle = v;
+  // Starting capital is at least ₪200K, so the cheapest apartment is always affordable.
+  out.oldHomeMortgage = Math.min(out.oldHomeMortgage, out.oldHomeValue);
+  out.equity = Math.max(out.equity, MIN_START_CAPITAL - oldHomeProceeds(out).net);
   return out;
 }
 
@@ -385,9 +401,29 @@ export function maxAffordablePrice(cash: number, type: ApartmentType, useBroker 
   return clamp(stepped, b.min, b.max);
 }
 
-/** Cash available for the purchase: equity plus the optional down-payment loan. */
+/** Minimum starting capital (cash + net proceeds from selling the old home). */
+export const MIN_START_CAPITAL = 200_000;
+
+/**
+ * Upgraders sell their current apartment: sale price − broker/lawyer fees − the
+ * mortgage left on it. Assumed exempt from מס שבח (sole apartment) and sold at
+ * the same time as the purchase. Zero for the other apartment types.
+ */
+export function oldHomeProceeds(inputs: SimInputs): { net: number; sellingCosts: number } {
+  if (inputs.apartmentType !== "upgrader") return { net: 0, sellingCosts: 0 };
+  const sellingCosts = inputs.oldHomeValue * sellingCostRate(inputs.useBroker);
+  const mortgage = Math.min(inputs.oldHomeMortgage, inputs.oldHomeValue);
+  return { net: Math.max(0, inputs.oldHomeValue - sellingCosts - mortgage), sellingCosts };
+}
+
+/** The user's own money at the start, the same in both tracks. */
+export function startCapital(inputs: SimInputs): number {
+  return inputs.equity + oldHomeProceeds(inputs).net;
+}
+
+/** Cash available for the purchase: own money plus the optional down-payment loan. */
 export function purchaseCash(inputs: SimInputs): number {
-  return inputs.equity + (inputs.loanEnabled ? inputs.loanAmount : 0);
+  return startCapital(inputs) + (inputs.loanEnabled ? inputs.loanAmount : 0);
 }
 
 /** Price used in the simulation: the user's choice (or the maximum in auto mode), never above the bank limit. */
@@ -402,8 +438,9 @@ export function effectivePropertyPrice(inputs: SimInputs): number {
 
 export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const inputs = sanitizeInputs(rawInputs);
+  const old = oldHomeProceeds(inputs);
+  const equity = startCapital(inputs); // own money at the start, both tracks
   const {
-    equity,
     years,
     apartmentType,
     useBroker,
@@ -644,6 +681,10 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const reNet = last.point.realEstate;
   const realEstate: RealEstateSummary = {
     apartmentType,
+    startCapital: equity,
+    oldHomeNetProceeds: old.net,
+    oldHomeSellingCosts: old.sellingCosts,
+    oldHomeAboveCeiling: apartmentType === "upgrader" && inputs.oldHomeValue > SHEVACH_SINGLE_CEILING,
     propertyPrice: price,
     purchaseTax: pTax,
     closingCosts: closing,

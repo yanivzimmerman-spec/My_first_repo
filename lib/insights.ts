@@ -17,7 +17,7 @@ export function topReasons(r: SimResult): Reason[] {
   const re = r.realEstate;
   const sp = r.sp500;
   const y = r.inputs.years;
-  const leverage = r.inputs.equity > 0 ? re.propertyPrice / r.inputs.equity : 0;
+  const leverage = re.startCapital > 0 ? re.propertyPrice / re.startCapital : 0;
 
   const gains: Reason[] = [
     {

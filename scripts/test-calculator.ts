@@ -86,6 +86,18 @@ ok(withLoan.realEstate.extraLoanPayment > 0 && near(withLoan.realEstate.initialM
 ok(withLoan.realEstate.extraLoanRemaining === 0, "10-year loan repaid within 15 years");
 ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested, 1), "with loan + matching, both tracks still invest the same own cash");
 
+// Upgrader: the old home's sale joins the starting money, in both tracks
+{
+  const u = simulate({ ...DEFAULT_INPUTS, apartmentType: "upgrader", equity: 0, oldHomeValue: 2_000_000, oldHomeMortgage: 500_000 });
+  const proceeds = 2_000_000 * (1 - 0.0295) - 500_000;
+  ok(near(u.realEstate.oldHomeNetProceeds, proceeds, 0.01), "old home: ₪2M − 2.95% fees − ₪500K mortgage = ₪1.441M");
+  ok(near(u.realEstate.startCapital, proceeds, 0.01) && near(u.points[0].sp500, proceeds, 0.01), "proceeds are the starting money in both tracks");
+  const none = simulate({ ...DEFAULT_INPUTS, apartmentType: "single", oldHomeValue: 2_000_000, oldHomeMortgage: 0 });
+  ok(none.realEstate.oldHomeNetProceeds === 0, "old home ignored unless upgrader");
+  const under = simulate({ ...DEFAULT_INPUTS, apartmentType: "upgrader", equity: 0, oldHomeValue: 600_000, oldHomeMortgage: 600_000 });
+  ok(near(under.realEstate.startCapital, 200_000, 0.01), "fully mortgaged old home → cash raised to the ₪200K minimum");
+}
+
 // Loan to invest in the S&P
 const spl = simulate({ ...DEFAULT_INPUTS, spLoanEnabled: true, spLoanAmount: 300_000 });
 ok(near(spl.points[0].sp500, DEFAULT_INPUTS.equity, 0.01), "S&P loan: year 0 net worth = own equity (loan offsets)");

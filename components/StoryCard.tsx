@@ -42,6 +42,11 @@ export default function StoryCard({ result }: { result: SimResult }) {
           </h4>
           <ol>
             <Step when="היום">
+              {re.oldHomeNetProceeds > 0 && (
+                <>
+                  מוכרים את הדירה הקיימת ונשארים עם {formatCompactILS(re.oldHomeNetProceeds)} אחרי עמלות וסגירת המשכנתא.{" "}
+                </>
+              )}
               קונים דירה ב-<B>{formatCompactILS(re.propertyPrice)}</B> עם משכנתא של {formatCompactILS(re.loanAmount)}
               {re.extraLoanPrincipal > 0 && <> והלוואה של {formatCompactILS(re.extraLoanPrincipal)}</>}. מס רכישה ועלויות:{" "}
               {formatCompactILS(re.purchaseTax + re.closingCosts)}.
@@ -79,7 +84,7 @@ export default function StoryCard({ result }: { result: SimResult }) {
           </h4>
           <ol>
             <Step when="היום">
-              משקיעים את אותם <B>{formatCompactILS(r.inputs.equity)}</B> {sp.vehicle === "israeli" ? "בקרן מחקה" : "ב-ETF אירי"}
+              {re.oldHomeNetProceeds > 0 && <>גם כאן מוכרים את הדירה הקיימת. </>}משקיעים את אותם <B>{formatCompactILS(re.startCapital)}</B> {sp.vehicle === "israeli" ? "בקרן מחקה" : "ב-ETF אירי"}
               {sp.loanPrincipal > 0 && <>, ועוד הלוואה של {formatCompactILS(sp.loanPrincipal)}</>}. בלי מס רכישה ובלי עמלות
               גדולות.
             </Step>
@@ -112,7 +117,7 @@ export default function StoryCard({ result }: { result: SimResult }) {
 
       {matching && own > 0.5 && (
         <p className="mt-5 border-t border-slate-100 pt-4 text-[13px] leading-relaxed text-slate-500">
-          בשני המסלולים יוצא מהכיס אותו סכום: {formatCompactILS(r.inputs.equity)} היום ועוד כ-{formatILS(own)} בחודש. כך
+          בשני המסלולים יוצא מהכיס אותו סכום: {formatCompactILS(re.startCapital)} היום ועוד כ-{formatILS(own)} בחודש. כך
           ההשוואה הוגנת.
         </p>
       )}

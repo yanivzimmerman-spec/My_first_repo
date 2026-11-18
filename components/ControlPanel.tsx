@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, AlertTriangle } from "lucide-react";
-import { BOUNDS, MAX_LTV, type ApartmentType, type SimInputs, type SimResult } from "@/lib/calculator";
+import { BOUNDS, MAX_LTV, MIN_START_CAPITAL, type ApartmentType, type SimInputs, type SimResult } from "@/lib/calculator";
 import { formatCompactILS, formatILS, formatPct } from "@/lib/format";
 import SliderInput from "./SliderInput";
 import { Segmented, Switch } from "./Toggle";
@@ -19,7 +19,7 @@ interface Props {
 
 const TYPE_TEXT: Record<ApartmentType, string> = {
   single: "זו תהיה הדירה היחידה שלכם. מס רכישה נמוך, ואין מס כשמוכרים. הבנק מממן עד 75%.",
-  upgrader: "יש לכם דירה ואתם מוכרים אותה תוך 24 חודשים. מס כמו דירה יחידה, והבנק מממן עד 70%.",
+  upgrader: "מוכרים את הדירה שיש לכם וקונים אחרת. מס רכישה כמו דירה יחידה, והבנק מממן עד 70%.",
   additional: "יש לכם כבר דירה ואתם שומרים אותה. מס רכישה 8%, מס 25% על הרווח כשמוכרים, והבנק מממן עד 50%.",
 };
 
@@ -97,12 +97,15 @@ export default function ControlPanel({ inputs, result, set }: Props) {
       {/* ---------------- Basic ---------------- */}
       <Group title="הנתונים שלכם">
         <SliderInput
-          label="כמה כסף יש לכם?"
+          label={type === "upgrader" ? "כמה כסף יש לכם, בנוסף לדירה?" : "כמה כסף יש לכם?"}
           kind="currency"
           value={inputs.equity}
-          bound={BOUNDS.equity}
+          bound={{
+            ...BOUNDS.equity,
+            min: Math.max(0, MIN_START_CAPITAL - re.oldHomeNetProceeds),
+          }}
           onChange={(v) => set("equity", v)}
-          hint="ההון העצמי שאתם יכולים להשקיע היום"
+          hint={type === "upgrader" ? "מזומן או חסכונות. הכסף ממכירת הדירה נוסף בהמשך" : "ההון העצמי שאתם יכולים להשקיע היום"}
         />
         <SliderInput
           label="לכמה שנים?"
@@ -130,6 +133,39 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{TYPE_TEXT[type]}</p>
         </div>
 
+        {type === "upgrader" && (
+          <div className="space-y-6 rounded-xl border border-slate-200 p-4">
+            <SliderInput
+              label="כמה שווה הדירה שלכם היום?"
+              kind="currency"
+              value={inputs.oldHomeValue}
+              bound={BOUNDS.oldHomeValue}
+              accent={RE}
+              onChange={(v) => set("oldHomeValue", v)}
+            />
+            <SliderInput
+              label="כמה נשאר לשלם על המשכנתא שלה?"
+              kind="currency"
+              value={inputs.oldHomeMortgage}
+              bound={{ ...BOUNDS.oldHomeMortgage, max: inputs.oldHomeValue }}
+              accent={RE}
+              onChange={(v) => set("oldHomeMortgage", v)}
+            />
+            <p className="text-[13px] leading-relaxed text-slate-600">
+              אחרי עמלות מכירה של {formatILS(re.oldHomeSellingCosts)} וסגירת המשכנתא נשארים לכם{" "}
+              <span className="font-semibold text-slate-900">{formatILS(re.oldHomeNetProceeds)}</span>. יחד עם המזומן זה{" "}
+              <span className="font-semibold text-slate-900">{formatILS(re.startCapital)}</span>, ואותו סכום מושקע גם במסלול
+              ה-S&P.
+            </p>
+            {re.oldHomeAboveCeiling && (
+              <p className="flex gap-2 rounded-lg bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-900">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                הדירה שווה יותר מתקרת הפטור (₪5,008,000), כך שייתכן מס שבח חלקי על המכירה. הוא לא נכלל בחישוב.
+              </p>
+            )}
+          </div>
+        )}
+
         <div>
           <SliderInput
             label="מחיר הדירה"
@@ -154,7 +190,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               </p>
             )}
             <p>
-              עם {formatILS(inputs.equity)}
+              עם {formatILS(re.startCapital)}
               {inputs.loanEnabled && <> ועוד הלוואה של {formatILS(inputs.loanAmount)}</>} אפשר לקנות {TYPE_NAME[type]} עד{" "}
               <span className="font-semibold text-slate-900">{formatILS(re.maxPrice)}</span>. הבנק מממן עד{" "}
               {formatPct(MAX_LTV[type] * 100, 0)}, ואת השאר, כולל מס רכישה של {formatILS(re.purchaseTax)} ועלויות
