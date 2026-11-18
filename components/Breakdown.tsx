@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Calculator } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { SimResult } from "@/lib/calculator";
 import { formatILS } from "@/lib/format";
 
@@ -16,7 +16,7 @@ interface Line {
 }
 
 function cell(v: Cell, negative?: boolean) {
-  if (v === null) return <span className="text-slate-300">—</span>;
+  if (v === null) return <span className="text-hair">—</span>;
   if (typeof v === "string") return v;
   if (Math.abs(v) < 0.5) return formatILS(0);
   return negative ? `−${formatILS(Math.abs(v))}` : formatILS(v);
@@ -86,52 +86,64 @@ export default function Breakdown({ result }: { result: SimResult }) {
   ];
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)]">
+    <section className="border-t-4 border-ink">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 p-4 text-right sm:p-5"
+        className="flex w-full items-end justify-between gap-3 border-b border-ink py-3 text-right"
       >
-        <span className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-slate-600">
-            <Calculator size={16} />
-          </span>
-          <span>
-            <span className="block text-base font-bold text-slate-900">איך הגענו למספרים?</span>
-            <span className="block text-xs text-slate-500">פירוט מלא: השקעה, מסים, משכנתא ושווי סופי</span>
-          </span>
+        <span>
+          <span className="block font-serif text-[24px] font-black leading-tight text-ink sm:text-[28px]">איך הגענו למספרים?</span>
+          <span className="mt-1 block text-[13px] text-ink-3">פירוט מלא: השקעה, מסים, משכנתא ושווי סופי</span>
         </span>
-        <ChevronDown size={20} className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className="flex shrink-0 items-center gap-1 text-[13px] font-semibold text-ink">
+          {open ? "סגירה" : "לפירוט המלא"}
+          <ChevronDown size={16} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+        </span>
       </button>
 
       {open && (
-        <div className="overflow-x-auto px-2 pb-4 sm:px-5 sm:pb-5">
-          <table className="w-full min-w-[460px] text-sm">
+        <div className="overflow-x-auto pb-2">
+          <table className="w-full min-w-[460px] text-[14px]">
             <thead>
-              <tr className="text-xs text-slate-500">
-                <th className="w-[44%] px-2 py-2 text-right font-medium"></th>
-                <th className="px-2 py-2 text-right font-semibold text-re-ink">דירה להשקעה</th>
-                <th className="px-2 py-2 text-right font-semibold text-sp-ink">S&P 500</th>
+              <tr className="border-b border-hair text-[12px]">
+                <th className="w-[44%] py-2.5 text-right font-medium"></th>
+                <th className="py-2.5 text-right">
+                  <span dir="ltr" className="ml-1.5 bg-re px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-white">RE</span>
+                  <span className="font-bold text-ink">דירה להשקעה</span>
+                </th>
+                <th className="py-2.5 text-right">
+                  <span dir="ltr" className="ml-1.5 bg-sp-ink px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-white">SPX</span>
+                  <span className="font-bold text-ink">S&P 500</span>
+                </th>
               </tr>
             </thead>
             {groups.map((g) => (
-              <tbody key={g.title} className="tabular-nums">
+              <tbody key={g.title}>
                 <tr>
-                  <td colSpan={3} className="px-2 pb-1 pt-4 text-xs font-bold uppercase tracking-wide text-slate-400">
+                  <td colSpan={3} className="pb-1 pt-5 font-serif text-[15px] font-bold text-ink">
                     {g.title}
                   </td>
                 </tr>
                 {g.lines.map((l) => (
-                  <tr key={l.label} className={`border-t border-slate-100 ${l.strong ? "bg-slate-50/80 font-semibold" : ""}`}>
-                    <td className="px-2 py-2 text-slate-600">
+                  <tr key={l.label} className={`border-t border-hair ${l.strong ? "bg-paper-2/70 font-semibold" : ""}`}>
+                    <td className="py-2 pl-2 text-ink-2">
                       {l.label}
-                      {l.note && <span className="block text-[11px] font-normal text-slate-400">{l.note}</span>}
+                      {l.note && <span className="block text-[11.5px] font-normal text-ink-3">{l.note}</span>}
                     </td>
-                    <td className={`px-2 py-2 ${l.negative && typeof l.re === "number" && l.re > 0.5 ? "text-rose-600" : "text-slate-900"}`}>
+                    <td
+                      className={`py-2 font-mono tabular-nums ${typeof l.re === "string" ? "font-sans text-[13px]" : ""} ${
+                        l.negative && typeof l.re === "number" && l.re > 0.5 ? "text-down" : "text-ink"
+                      }`}
+                    >
                       {cell(l.re, l.negative)}
                     </td>
-                    <td className={`px-2 py-2 ${l.negative && typeof l.sp === "number" && l.sp > 0.5 ? "text-rose-600" : "text-slate-900"}`}>
+                    <td
+                      className={`py-2 font-mono tabular-nums ${
+                        l.negative && typeof l.sp === "number" && l.sp > 0.5 ? "text-down" : "text-ink"
+                      }`}
+                    >
                       {cell(l.sp, l.negative)}
                     </td>
                   </tr>
@@ -139,19 +151,19 @@ export default function Breakdown({ result }: { result: SimResult }) {
               </tbody>
             ))}
             <tbody>
-              <tr className="border-t-2 border-slate-900">
-                <td className="px-2 py-3 font-bold text-slate-900">שווי נטו בכיס</td>
-                <td className="px-2 py-3 text-base font-extrabold text-re-ink tabular-nums">{formatILS(re.netWorth)}</td>
-                <td className="px-2 py-3 text-base font-extrabold text-sp-ink tabular-nums">{formatILS(sp.netWorth)}</td>
+              <tr className="border-y-2 border-ink">
+                <td className="py-3 font-serif text-[16px] font-black text-ink">שווי נטו בכיס</td>
+                <td className="py-3 font-mono text-[16px] font-bold tabular-nums text-re-ink">{formatILS(re.netWorth)}</td>
+                <td className="py-3 font-mono text-[16px] font-bold tabular-nums text-sp-ink">{formatILS(sp.netWorth)}</td>
               </tr>
             </tbody>
           </table>
-          <p className="mt-3 px-2 text-[11px] leading-relaxed text-slate-400">
+          <p className="mt-3 text-[11.5px] leading-relaxed text-ink-3">
             הנחות: מס רכישה לפי מדרגות 2025 · פטור על שכירות עד ₪5,654 לחודש (צמוד למדד), מעליו מסלול 10% · מס שבח ומס רווחי
             הון 25% על רווח ריאלי (בניכוי אינפלציה של {result.inputs.inflation}% בשנה) · דמי ניהול מנוכים מהתשואה.
           </p>
         </div>
       )}
-    </div>
+    </section>
   );
 }

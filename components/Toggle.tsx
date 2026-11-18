@@ -2,11 +2,12 @@
 
 import type { ReactNode } from "react";
 
+/** Terminal toggle: [ON]/[OFF] block switch. */
 export function Switch({
   checked,
   onChange,
   label,
-  accent = "#0F172A",
+  accent = "var(--color-amber)",
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
@@ -20,15 +21,21 @@ export function Switch({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20"
-      style={{ background: checked ? accent : "#CBD5E1" }}
+      dir="ltr"
+      className="flex shrink-0 items-center border border-term-line font-mono text-[11px] font-semibold leading-none"
     >
-      {/* RTL: "off" knob sits on the right, "on" slides left */}
       <span
-        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-          checked ? "-translate-x-[22px]" : "-translate-x-0.5"
-        }`}
-      />
+        className="px-2 py-1.5 transition-colors"
+        style={checked ? { background: accent, color: "#0E1110" } : { color: "var(--color-term-dim)" }}
+      >
+        ON
+      </span>
+      <span
+        className="px-2 py-1.5 transition-colors"
+        style={!checked ? { background: "var(--color-term-line)", color: "var(--color-term-text)" } : { color: "var(--color-term-dim)" }}
+      >
+        OFF
+      </span>
     </button>
   );
 }
@@ -37,7 +44,7 @@ export function Segmented<T extends string>({
   value,
   onChange,
   options,
-  accent = "#0F172A",
+  accent = "var(--color-amber)",
   ariaLabel,
 }: {
   value: T;
@@ -47,7 +54,7 @@ export function Segmented<T extends string>({
   ariaLabel: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="grid grid-flow-col auto-cols-fr gap-1 rounded-xl bg-slate-100 p-1">
+    <div role="radiogroup" aria-label={ariaLabel} className="grid auto-cols-fr grid-flow-col border border-term-line">
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -57,10 +64,10 @@ export function Segmented<T extends string>({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(o.value)}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-              active ? "bg-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+            className={`px-3 py-2 text-sm font-semibold transition-colors ${
+              active ? "" : "text-term-dim hover:text-term-text"
             }`}
-            style={active ? { color: accent } : undefined}
+            style={active ? { background: accent, color: "#fff" } : undefined}
           >
             {o.label}
           </button>

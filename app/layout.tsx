@@ -1,11 +1,25 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo } from "next/font/google";
+import { Frank_Ruhl_Libre, Heebo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-heebo",
+  display: "swap",
+});
+
+const frank = Frank_Ruhl_Libre({
+  subsets: ["hebrew", "latin"],
+  weight: ["500", "700", "900"],
+  variable: "--font-frank",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-mono",
   display: "swap",
 });
 
@@ -18,12 +32,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#F8FAFC",
+  viewportFit: "cover",
+  themeColor: "#0E1110",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="he" dir="rtl" className={heebo.variable}>
+    <html lang="he" dir="rtl" className={`${heebo.variable} ${frank.variable} ${plexMono.variable}`}>
       <body className="min-h-screen antialiased tabular-nums">{children}</body>
     </html>
   );
