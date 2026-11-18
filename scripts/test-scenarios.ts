@@ -34,13 +34,14 @@ function expectedStart(inp: SimInputs): number {
 }
 
 /** Independent month-1 rent after vacancy, rent tax (cheaper track), 8% maintenance, ₪150 insurance. */
-function expectedNetRent(price: number, yieldPct: number): number {
+function expectedNetRent(price: number, yieldPct: number, ownRent = 0): number {
   const gross = (price * yieldPct) / 100 / 12;
   const collected = (gross * 11) / 12;
   let tax = 0;
   if (collected > RENT_CEILING) {
     const exempt = Math.max(0, Math.min(RENT_CEILING, 2 * RENT_CEILING - collected));
-    tax = Math.min(0.1 * collected, 0.31 * (collected - exempt));
+    const deduction = Math.min(ownRent, 7_500); // s.122(f): up to ₪90K a year
+    tax = Math.min(0.1 * Math.max(0, collected - deduction), 0.31 * (collected - exempt));
   }
   return collected - tax - 0.08 * collected - 150;
 }
@@ -59,7 +60,7 @@ const OLD_HOMES: Partial<SimInputs>[] = [
 const MARKETS: Record<string, Partial<SimInputs>> = {
   low: { mortgageRate: 2.5, rentalYield: 2.2, rentGrowth: 1, appreciation: 1, spReturn: 5, spFee: 0.05, inflation: 1 },
   base: {},
-  high: { mortgageRate: 7.5, rentalYield: 4.5, rentGrowth: 5, appreciation: 7, spReturn: 12, spFee: 0.5, inflation: 4 },
+  high: { mortgageRate: 7.5, rentalYield: 4.5, rentGrowth: 5, appreciation: 7, spReturn: 12, spFee: 0.5, inflation: 4, ownRentPaid: 9_000 },
 };
 
 const failures = new Map<string, { count: number; example: string }>();
@@ -138,7 +139,7 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   }
 
   // 4b. Month-1 cash flow, computed independently
-  const expNet = expectedNetRent(re.propertyPrice, inp.rentalYield);
+  const expNet = expectedNetRent(re.propertyPrice, inp.rentalYield, inp.apartmentType === "additional" ? 0 : inp.ownRentPaid);
   check(near(re.initialMonthlyRentNet, expNet, 0.01), "month-1 net rent (independent)", ctx);
   const expPmt = spitzerPayment(re.loanAmount, inp.mortgageRate, inp.mortgageTerm);
   const expLoanPmt = inp.loanEnabled ? spitzerPayment(inp.loanAmount, inp.loanRate, inp.loanTerm) : 0;

@@ -50,6 +50,8 @@ export const INSURANCE_MONTHLY = 150; // building + mortgage life insurance, ₪
 export const RENT_EXEMPT_CEILING_MONTHLY = 5_654;
 export const RENT_FLAT_TAX_RATE = 0.1;
 export const MARGINAL_TAX_RATE = 0.31;
+/** s.122(f): sole-apartment owner living in a rental deducts rent paid, up to ₪90K a year, on the 10% track */
+export const OWN_RENT_DEDUCTION_CAP_MONTHLY = 90_000 / 12;
 
 /** מס שבח / capital gains on real gain */
 export const CAPITAL_GAINS_TAX_RATE = 0.25;
@@ -128,6 +130,11 @@ export interface SimInputs {
   spLoanAmount: number;
   spLoanRate: number;
   spLoanTerm: number;
+  /**
+   * Monthly rent the owner pays for their own home (0 = not living in a rental).
+   * A sole-apartment owner may deduct it, up to ₪90K a year, on the 10% track (s.122(f)).
+   */
+  ownRentPaid: number;
   /** Optional bank-approval check: household's net monthly income */
   incomeCheck: boolean;
   monthlyIncome: number;
@@ -168,6 +175,7 @@ export const BOUNDS: Record<NumericKey, Bound> = {
   spLoanRate: { min: 2, max: 15, step: 0.1 },
   spLoanTerm: { min: 1, max: 20, step: 1 },
   monthlyIncome: { min: 5_000, max: 100_000, step: 500 },
+  ownRentPaid: { min: 0, max: 20_000, step: 100 },
 };
 
 export const DEFAULT_INPUTS: SimInputs = {
@@ -199,6 +207,7 @@ export const DEFAULT_INPUTS: SimInputs = {
   spLoanAmount: 200_000,
   spLoanRate: 6.5,
   spLoanTerm: 10,
+  ownRentPaid: 0,
   incomeCheck: false,
   monthlyIncome: 25_000,
 };
@@ -402,11 +411,13 @@ export function spitzerPayment(principal: number, annualRatePct: number, years: 
  * the ceiling, tapering to zero at twice the ceiling, remainder at the marginal
  * rate) and the 10% track on gross rent.
  */
-export function monthlyRentTax(rent: number, ceiling: number): number {
+export function monthlyRentTax(rent: number, ceiling: number, ownRentDeduction = 0): number {
   if (!(rent > ceiling)) return 0;
   const exempt = Math.max(0, Math.min(ceiling, 2 * ceiling - rent));
   const exemptionTrack = MARGINAL_TAX_RATE * (rent - exempt);
-  return Math.min(RENT_FLAT_TAX_RATE * rent, exemptionTrack);
+  const deduction = Math.min(Math.max(0, ownRentDeduction), OWN_RENT_DEDUCTION_CAP_MONTHLY);
+  const flatTrack = RENT_FLAT_TAX_RATE * Math.max(0, rent - deduction);
+  return Math.min(flatTrack, exemptionTrack);
 }
 
 /** Surtax on capital income above the (indexed) threshold. */
@@ -656,7 +667,9 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     const rentGross = Math.max(0, ((price * rentalYield) / 100 / 12) * Math.pow(1 + rentGrowth / 100, yearIdx));
     const collected = rentGross * (1 - VACANCY_MONTHS_PER_YEAR / 12);
     const ceiling = RENT_EXEMPT_CEILING_MONTHLY * thresholdIndex(yearIdx + 1);
-    const rentTax = monthlyRentTax(collected, ceiling);
+    // The rent-paid deduction is for a sole-apartment owner only (not an additional apartment)
+    const ownRent = apartmentType === "additional" ? 0 : inputs.ownRentPaid;
+    const rentTax = monthlyRentTax(collected, ceiling, ownRent);
     const ownership = collected * MAINTENANCE_RATE + INSURANCE_MONTHLY * Math.pow(1 + inflation / 100, yearIdx);
     const rentNet = collected - rentTax - ownership;
     rentGrossTotal += rentGross;

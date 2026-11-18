@@ -20,7 +20,8 @@ interface Props {
 const TYPE_TEXT: Record<ApartmentType, string> = {
   single: "זו תהיה הדירה היחידה שלכם. מס רכישה נמוך, ואין מס כשמוכרים. הבנק מממן עד 75%.",
   upgrader: "מוכרים את הדירה שיש לכם וקונים אחרת. מס רכישה כמו דירה יחידה.",
-  additional: "יש לכם כבר דירה ואתם שומרים אותה. מס רכישה 8%, מס 25% על הרווח כשמוכרים, והבנק מממן עד 50%.",
+  additional:
+    "יש לכם כבר דירה ואתם שומרים אותה. מס רכישה 8%, מס 25% על הרווח כשמוכרים, והבנק מממן עד 50%. ה-8% הם הוראת שעה עד 10.2.2027; אם לא תוארך, המס יירד.",
 };
 
 const TYPE_NAME: Record<ApartmentType, string> = {
@@ -456,6 +457,17 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               accent={RE}
               onChange={(v) => set("rentGrowth", v)}
             />
+            {type !== "additional" && (
+              <SliderInput
+                label="שכר דירה שאתם משלמים בעצמכם"
+                kind="currency"
+                value={inputs.ownRentPaid}
+                bound={BOUNDS.ownRentPaid}
+                accent={RE}
+                onChange={(v) => set("ownRentPaid", v)}
+                hint="אם אתם גרים בשכירות ומשכירים את הדירה היחידה שלכם, מותר לקזז את שכר הדירה שאתם משלמים (עד ₪90,000 בשנה) במסלול 10%. 0 = לא רלוונטי."
+              />
+            )}
             <div>
               <p className="mb-2 text-[15px] text-slate-700">איך משקיעים ב-S&P 500?</p>
               <Segmented

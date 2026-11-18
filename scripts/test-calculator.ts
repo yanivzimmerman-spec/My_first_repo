@@ -28,6 +28,13 @@ ok(near(sellingCostRate(true), 0.0295, 1e-9), "selling costs 2.95% with broker")
 ok(monthlyRentTax(5_654, 5_654) === 0, "rent at ceiling → exempt");
 ok(near(monthlyRentTax(6_000, 5_654), Math.min(600, 0.31 * (6_000 - (2 * 5_654 - 6_000))), 0.01), "rent in taper → cheaper of 10% and taper");
 ok(near(monthlyRentTax(12_000, 5_654), 1_200, 0.01), "rent above 2× ceiling → 10% track");
+ok(near(monthlyRentTax(10_000, 5_654, 6_000), 400, 0.01), "₪90K rule: 10% of (rent − own rent paid)");
+ok(near(monthlyRentTax(10_000, 5_654, 9_000), 250, 0.01), "₪90K rule: deduction capped at ₪7,500 a month");
+{
+  const rich = { ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 4_000_000, rentalYield: 4, ownRentPaid: 6_000 };
+  ok(simulate({ ...rich, apartmentType: "single" }).realEstate.totalRentTax < simulate({ ...rich, ownRentPaid: 0 }).realEstate.totalRentTax, "living in a rental lowers the rent tax on a sole apartment");
+  ok(simulate({ ...rich, apartmentType: "additional" }).realEstate.totalRentTax === simulate({ ...rich, apartmentType: "additional", ownRentPaid: 0 }).realEstate.totalRentTax, "no rent-paid deduction for an additional apartment");
+}
 
 // Surtax
 ok(surtax(700_000, 721_560) === 0 && near(surtax(1_000_000, 721_560), 0.05 * 278_440, 0.01), "surtax 5% above ₪721,560");
