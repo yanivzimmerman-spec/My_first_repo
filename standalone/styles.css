@@ -2,6 +2,5 @@
 @source "../components";
 :root {
   --font-heebo: "Heebo";
-  --font-frank: "Frank Ruhl Libre";
-  --font-plex-mono: "IBM Plex Mono";
+  color-scheme: light;
 }

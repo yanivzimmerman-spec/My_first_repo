@@ -30,7 +30,7 @@ const html = `<title>נדל״ן מול סנופי</title>
 <meta name="description" content="סימולטור דירה להשקעה מול S&amp;P 500 עם מיסוי ישראלי">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap">
 <style>${css}</style>
 <div id="root" dir="rtl" lang="he"></div>
 <script>${js}</script>

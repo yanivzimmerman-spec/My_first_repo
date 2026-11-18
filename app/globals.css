@@ -1,153 +1,77 @@
 @import "tailwindcss";
 
-/*
- * "מוסף כלכלה × טרמינל" — a newsprint broadsheet (serif headlines, hairline
- * column rules) with dark trading-terminal panels for the live data.
- * Deliberately single-theme: the paper look is the identity.
- */
 @theme {
-  --font-sans: var(--font-heebo), "Heebo", system-ui, sans-serif;
-  --font-serif: var(--font-frank), "Frank Ruhl Libre", "David Libre", Georgia, serif;
-  --font-mono: var(--font-plex-mono), "IBM Plex Mono", var(--font-heebo), "Heebo", ui-monospace, monospace;
-
-  /* paper */
-  --color-paper: #ecebe6;
-  --color-paper-2: #e3e1da;
-  --color-ink: #151514;
-  --color-ink-2: #46453f;
-  --color-ink-3: #75736b;
-  --color-hair: #c9c6bc;
-
-  /* terminal */
-  --color-term: #0e1110;
-  --color-term-2: #161a18;
-  --color-term-line: #262c29;
-  --color-term-text: #dbe3de;
-  --color-term-dim: #8b958f;
-  --color-amber: #f2a93b;
-
-  /* series */
-  --color-re: #4f46e5;
-  --color-re-ink: #3730a3;
-  --color-re-glow: #7c78ff;
+  --font-sans: var(--font-heebo), "Heebo", "Assistant", system-ui, sans-serif;
+  --color-canvas: #f8fafc;
+  --color-ink: #0f172a;
   --color-sp: #10b981;
-  --color-sp-ink: #047857;
-  --color-sp-glow: #10a97c;
-  --color-down: #b4361a;
-  --color-down-glow: #ff7a5c;
+  --color-sp-ink: #047857; /* text-safe emerald (AA on white) */
+  --color-sp-soft: #ecfdf5;
+  --color-re: #4f46e5;
+  --color-re-ink: #4338ca;
+  --color-re-soft: #eef2ff;
 }
 
-:root {
-  color-scheme: light;
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--color-paper);
+  background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-feature-settings: "tnum" 1;
-  /* faint newsprint grain */
-  background-image: radial-gradient(rgb(21 21 20 / 0.035) 1px, transparent 1px);
-  background-size: 3px 3px;
 }
 
-.font-serif {
-  font-feature-settings: normal;
-}
-
-/* ---------- Range slider: terminal style, RTL fill ---------- */
+/* ---------- Range slider (RTL-aware fill) ---------- */
 .range {
   --pct: 50%;
-  --accent: var(--color-amber);
+  --accent: #0f172a;
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
-  border-radius: 0;
-  background: linear-gradient(to left, var(--accent) var(--pct), var(--color-term-line) var(--pct));
+  height: 6px;
+  border-radius: 999px;
+  /* dir=rtl: min sits on the right, so the filled part grows right → left */
+  background: linear-gradient(to left, var(--accent) var(--pct), #e2e8f0 var(--pct));
   outline: none;
   cursor: pointer;
 }
 [dir="ltr"] .range {
-  background: linear-gradient(to right, var(--accent) var(--pct), var(--color-term-line) var(--pct));
+  background: linear-gradient(to right, var(--accent) var(--pct), #e2e8f0 var(--pct));
 }
 .range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 18px;
-  border-radius: 2px;
-  background: var(--color-term-text);
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
   border: 2px solid var(--accent);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.2);
   transition: transform 120ms ease;
 }
 .range::-moz-range-thumb {
-  width: 12px;
-  height: 16px;
-  border-radius: 2px;
-  background: var(--color-term-text);
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
   border: 2px solid var(--accent);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.2);
 }
 .range:active::-webkit-slider-thumb {
-  transform: scaleY(1.2);
+  transform: scale(1.15);
 }
 .range:focus-visible::-webkit-slider-thumb {
-  outline: 2px solid var(--color-amber);
-  outline-offset: 3px;
+  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 2px;
 }
 
-/* ---------- Ticker tape ---------- */
-@keyframes ticker {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    /* RTL ticker: content travels left → right */
-    transform: translateX(50%);
-  }
-}
-.ticker-track {
-  animation: ticker 40s linear infinite;
-}
-.ticker:hover .ticker-track {
-  animation-play-state: paused;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ticker-track {
-    animation: none;
-  }
-}
-
-/* blinking terminal cursor */
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
-}
-.cursor-blink {
-  animation: blink 1.1s steps(1) infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .cursor-blink {
-    animation: none;
-  }
-}
-
-/* terminal panel scrollbar */
-.term-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-term-line) transparent;
-}
-
+/* Recharts: keep SVG text in the Heebo stack and allow focus ring to be subtle */
 .recharts-wrapper,
 .recharts-wrapper text {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
 }
 .recharts-wrapper *:focus {
   outline: none;
-}
-
-:focus-visible {
-  outline: 2px solid var(--color-amber);
-  outline-offset: 2px;
 }
