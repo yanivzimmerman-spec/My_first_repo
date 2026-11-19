@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Share2, Check, RotateCcw, Moon, Sun, Mail, Copy } from "lucide-react";
+import { Share2, Check, Moon, Sun, Mail, Copy } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { DEFAULT_INPUTS, breakEvenAppreciation, breakEvenRent, simulate, BOUNDS, type SimInputs } from "@/lib/calculator";
-import { PRESETS, SCENARIO_DELTAS } from "@/lib/presets";
+import { SCENARIO_DELTAS } from "@/lib/presets";
 import { inputsToQuery, queryToInputs } from "@/lib/url";
 import { formatCompactILS, formatILS } from "@/lib/format";
 import ControlPanel from "./ControlPanel";
@@ -48,10 +48,9 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 /**
- * `variant="situations"` is a draft (preview build only): situation cards replace the example chips.
  * The published site uses the default.
  */
-export default function Simulator({ variant }: { variant?: "situations" } = {}) {
+export default function Simulator() {
   const [inputs, setInputs] = useState<SimInputs>(DEFAULT_INPUTS);
   const [hydrated, setHydrated] = useState(false);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
@@ -126,8 +125,6 @@ export default function Simulator({ variant }: { variant?: "situations" } = {}) 
     setTimeout(() => setCopied("idle"), 2200);
   };
 
-  const activePreset = PRESETS.find((p) => sameInputs(p.inputs, inputs))?.id;
-  const isDefault = sameInputs(inputs, DEFAULT_INPUTS);
 
   const copyEmail = async () => {
     if (await copyText(FEEDBACK_EMAIL)) {
@@ -162,41 +159,11 @@ export default function Simulator({ variant }: { variant?: "situations" } = {}) 
           רווחי הון.
         </p>
 
-        {variant === "situations" ? (
-          <SituationPicker inputs={result.inputs} set={set} />
-        ) : (
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          <span className="text-[13px] text-slate-500">נסו תרחיש:</span>
-          {PRESETS.map((p) => {
-            const active = activePreset === p.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setInputs(p.inputs)}
-                aria-pressed={active}
-                title={p.description}
-                className={`rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition ${
-                  active
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
-                }`}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-          {!isDefault && (
-            <button
-              type="button"
-              onClick={() => setInputs(DEFAULT_INPUTS)}
-              className="flex items-center gap-1 px-2 py-1.5 text-[13px] text-slate-500 hover:text-slate-900"
-            >
-              <RotateCcw size={13} /> איפוס
-            </button>
-          )}
-        </div>
-        )}
+        <SituationPicker
+          inputs={result.inputs}
+          set={set}
+          onReset={sameInputs(inputs, DEFAULT_INPUTS) ? undefined : () => setInputs(DEFAULT_INPUTS)}
+        />
       </header>
 
       {view === "combo" ? (

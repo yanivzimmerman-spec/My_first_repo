@@ -1,5 +1,4 @@
 // Builds the whole app into one self-contained HTML file: dist/index.html
-// `node scripts/build-standalone.mjs preview` builds the draft preview into dist/preview.html
 // `node scripts/build-standalone.mjs plan` builds the planner test environment into dist/plan.html
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
@@ -7,7 +6,6 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const TARGETS = {
   main: { entry: "standalone/entry.tsx", out: "dist/index.html", title: "נדל״ן מול סנופי" },
-  preview: { entry: "standalone/preview-entry.tsx", out: "dist/preview.html", title: "בחירת מצב (טיוטה)" },
   plan: { entry: "standalone/plan-entry.tsx", out: "dist/plan.html", title: "לפני היועץ (טיוטה)" },
 };
 const target = TARGETS[process.argv[2] ?? "main"];
