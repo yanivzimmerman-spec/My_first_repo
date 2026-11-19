@@ -1,5 +1,6 @@
 /* Tests for the planner draft (lib/plan.ts) — run with `npm test`. */
-import { basics, decisionInputs, priceRange, leverage, monthsToMinimum, DEFAULT_PROFILE, COMFORTABLE_PTI, type Profile } from "../lib/plan.ts";
+import { basics, decisionInputs, priceRange, leverage, monthsToMinimum, advisorPrompt, ADVISOR_QUESTIONS, DEFAULT_PROFILE, COMFORTABLE_PTI, type Profile } from "../lib/plan.ts";
+import { breakEvenAppreciation } from "../lib/calculator.ts";
 import { simulate, maxAffordablePrice, purchaseCash, spitzerPayment } from "../lib/calculator.ts";
 
 let failures = 0;
@@ -77,6 +78,27 @@ ok(near(priceRange(P(), basics(P())).paymentBudget, COMFORTABLE_PTI * 24_000, 0.
 }
 ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0, debt: 0 }))) === Math.ceil((200_000 - 48_000) / 7_000), "months to the minimum at today's saving");
 ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0, debt: 0, expenses: 24_000 }))) === Infinity, "not saving → never");
+
+// The AI advisor prompt
+{
+  const p = P();
+  const b = basics(p);
+  const price = priceRange(p, b).suggested;
+  const inputs = decisionInputs(p, b, price);
+  const result = simulate(inputs);
+  const decision = { price, result, lev: leverage(result, p, b), be: breakEvenAppreciation(inputs) };
+  const empty = advisorPrompt(p, b, decision, {});
+  ok(empty.includes("₪24,000") && empty.includes("₪433,000") && empty.includes("₪400,000"), "prompt carries the household's numbers");
+  ok(empty.includes(`${(result.realEstate.netWorth / 1e6).toFixed(2)}M`) && empty.includes(`${(result.sp500.netWorth / 1e6).toFixed(2)}M`), "prompt carries both results");
+  ok(ADVISOR_QUESTIONS.every((q) => empty.includes(q.ask)), "unanswered: the AI is asked to ask every advisor question");
+  ok(empty.includes("שאל 3–4 שאלות בכל פעם"), "the AI asks before advising");
+  ok(!/[\u2066-\u2069]|NaN|undefined|Infinity/.test(empty), "plain text, no broken values");
+  const answered = advisorPrompt(p, b, decision, { age: "30–40", drop: "מחכה בסבלנות", note: "צפויה ירושה" });
+  ok(answered.includes("גיל: 30–40.") && !answered.includes(ADVISOR_QUESTIONS[0].ask), "an answered question moves from 'ask me' to the data");
+  ok(answered.includes("צפויה ירושה"), "free note included");
+  const short = P({ cash: 150_000, investments: 0, investmentsGain: 0, debt: 0 });
+  ok(advisorPrompt(short, basics(short), null, {}).includes("עוד לא מספיק להון עצמי"), "no decision → says there isn't enough for an apartment yet");
+}
 
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll planner tests passed");

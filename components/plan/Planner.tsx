@@ -12,6 +12,7 @@ import {
   Check,
   Copy,
   AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { simulate, breakEvenAppreciation, breakEvenRent, MIN_START_CAPITAL, type SimResult } from "@/lib/calculator";
@@ -22,11 +23,15 @@ import {
   priceRange,
   leverage,
   monthsToMinimum,
+  advisorPrompt,
+  ADVISOR_QUESTIONS,
   DEFAULT_PROFILE,
   PROFILE_BOUNDS as B,
   COMFORTABLE_PTI,
   type Profile,
   type Basics,
+  type Answers,
+  type PromptDecision,
 } from "@/lib/plan";
 import { formatILS, formatCompactILS as c, formatPct } from "@/lib/format";
 import SliderInput from "../SliderInput";
@@ -34,7 +39,7 @@ import { Switch, Segmented } from "../Toggle";
 import VerdictBanner from "../VerdictBanner";
 import RiskGauges from "../RiskGauges";
 
-const STEPS = ["מה יש לכם", "מה חשוב לכם", "קודם כל, הבסיס", "דירה או שוק ההון", "התוכנית שלכם"] as const;
+const STEPS = ["מה יש לכם", "מה חשוב לכם", "קודם כל, הבסיס", "דירה או שוק ההון", "התוכנית שלכם", "התייעצות עם AI"] as const;
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -151,6 +156,7 @@ export default function Planner() {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
+  const [answers, setAnswers] = useState<Answers>({});
 
   const set = <K extends keyof Profile>(key: K, value: Profile[K]) => {
     setProfile((p) => (p[key] === value ? p : { ...p, [key]: value }));
@@ -207,7 +213,7 @@ export default function Planner() {
         <p className="mb-2 text-[13px] text-slate-500 sm:hidden">
           שלב {step + 1} מתוך {STEPS.length}: <span className="font-semibold text-slate-800">{STEPS[step]}</span>
         </p>
-        <ol className="grid grid-cols-5 gap-1.5">
+        <ol className="grid grid-cols-6 gap-1.5">
           {STEPS.map((name, i) => (
             <li key={name}>
               <button
@@ -284,6 +290,21 @@ export default function Planner() {
             }}
           />
         )}
+        {step === 5 && (
+          <StepAI
+            p={profile}
+            b={b}
+            decision={decision}
+            answers={answers}
+            setAnswers={setAnswers}
+            copied={copied}
+            onCopy={async (text) => {
+              const ok = await copyText(text);
+              setCopied(ok ? "ok" : "fail");
+              setTimeout(() => setCopied("idle"), 2200);
+            }}
+          />
+        )}
       </main>
 
       {/* ---------- Navigation ---------- */}
@@ -313,6 +334,7 @@ export default function Planner() {
             onClick={() => {
               setProfile(DEFAULT_PROFILE);
               setPriceOverride(null);
+              setAnswers({});
               go(0);
             }}
             className="rounded-full border border-slate-300 bg-white px-5 py-2.5 text-[14.5px] font-semibold text-slate-700 transition hover:border-slate-500"
@@ -709,6 +731,105 @@ function StepPlan({
           {copied === "ok" ? <Check size={16} /> : <Copy size={16} />}
           {copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "להעתיק את התוכנית"}
         </button>
+      </section>
+    </div>
+  );
+}
+
+function StepAI({
+  p,
+  b,
+  decision,
+  answers,
+  setAnswers,
+  copied,
+  onCopy,
+}: {
+  p: Profile;
+  b: Basics;
+  decision: PromptDecision | null;
+  answers: Answers;
+  setAnswers: (f: (a: Answers) => Answers) => void;
+  copied: "idle" | "ok" | "fail";
+  onCopy: (text: string) => void;
+}) {
+  const prompt = advisorPrompt(p, b, decision, answers);
+  const left = ADVISOR_QUESTIONS.filter((q) => !answers[q.key]).length;
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+        <h2 className="text-xl font-bold text-slate-900">שאלות שיועץ היה שואל</h2>
+        <p className="mt-1 text-[14px] text-slate-600">לא חובה. על מה שלא תענו, הבינה המלאכותית תשאל אתכם בעצמה.</p>
+        <div className="mt-5 space-y-4">
+          {ADVISOR_QUESTIONS.map((q) => (
+            <div key={q.key}>
+              <p className="text-[13.5px] font-medium text-slate-700">{q.label}</p>
+              <div role="radiogroup" aria-label={q.label} className="mt-1.5 flex flex-wrap gap-1.5">
+                {q.options.map((o) => {
+                  const on = answers[q.key] === o;
+                  return (
+                    <button
+                      key={o}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => setAnswers((a) => ({ ...a, [q.key]: a[q.key] === o ? undefined : o }))}
+                      className={`rounded-full border px-3 py-1.5 text-[13px] transition ${
+                        on ? "border-slate-900 bg-slate-900 font-semibold text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
+                      }`}
+                    >
+                      {o}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          <label className="block">
+            <span className="text-[13.5px] font-medium text-slate-700">עוד משהו שחשוב שהיועץ יידע</span>
+            <textarea
+              rows={2}
+              value={answers.note ?? ""}
+              onChange={(e) => {
+                const note = e.target.value;
+                setAnswers((a) => ({ ...a, note }));
+              }}
+              placeholder="למשל: צפויה עזרה מההורים, מתכננים ילד, רוצים לפרוש מוקדם"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[14px] text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+        <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+          <Sparkles size={19} aria-hidden /> הפרומפט שלכם
+        </h2>
+        <p className="mt-1 text-[14px] leading-relaxed text-slate-600">
+          מעתיקים ומדביקים בצ׳אט עם בינה מלאכותית, כמו Claude, ChatGPT או Gemini. היא תשאל קודם את מה שחסר
+          {left > 0 ? ` (${left} מהשאלות כאן ועוד כמה שאלות עומק)` : " (שאלות עומק שאי אפשר לענות עליהן בכפתור)"}, ורק אז תציע תוכנית.
+        </p>
+        <textarea
+          readOnly
+          value={prompt}
+          rows={14}
+          aria-label="הפרומפט"
+          onFocus={(e) => e.currentTarget.select()}
+          className="mt-4 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-[13px] leading-relaxed text-slate-700 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => onCopy(prompt)}
+          className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-700"
+        >
+          {copied === "ok" ? <Check size={16} /> : <Copy size={16} />}
+          {copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה, אפשר לסמן ולהעתיק ידנית" : "להעתיק את הפרומפט"}
+        </button>
+        <ul className="mt-5 list-disc space-y-1 ps-5 text-[12.5px] leading-relaxed text-slate-500">
+          <li>הפרומפט כולל רק מספרים. אל תוסיפו בצ׳אט שם, תעודת זהות או מספרי חשבון.</li>
+          <li>בינה מלאכותית יכולה לטעות, במיוחד במספרי מס עדכניים. את מה שחשוב, בדקו במקור.</li>
+          <li>זה לא מחליף יועץ מורשה, אבל תגיעו לפגישה מוכנים הרבה יותר.</li>
+        </ul>
       </section>
     </div>
   );
