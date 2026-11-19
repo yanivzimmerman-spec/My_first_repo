@@ -189,7 +189,12 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
       {/* ---------- Header ---------- */}
       <header className="pt-8 pb-6 sm:pt-12 sm:pb-8">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[13px] font-semibold text-slate-500">נדל״ן מול סנופי</p>
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-slate-500">
+            נדל״ן מול סנופי
+            {withGuide && (
+              <span className="rounded-full border border-slate-300 px-2 py-px text-[11px] font-semibold text-slate-600">אלפא</span>
+            )}
+          </p>
           <button
             type="button"
             onClick={toggleTheme}
