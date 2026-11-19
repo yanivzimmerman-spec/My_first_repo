@@ -3,6 +3,7 @@
 import type { SimResult } from "@/lib/calculator";
 import { formatCompactILS, formatILS, formatPct } from "@/lib/format";
 import { topReasons } from "@/lib/insights";
+import { track } from "@/lib/track";
 
 export interface BreakEven {
   value: number | null;
@@ -175,6 +176,7 @@ export default function VerdictBanner({
         {guideLink && (
           <a
             href="#plan"
+            onClick={() => track({ type: "guideLink" })}
             className="mt-2.5 flex items-center gap-1.5 text-[14px] font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
           >
             ומה עכשיו? לבדוק את הבסיס ולקבל תוכנית מסודרת ←

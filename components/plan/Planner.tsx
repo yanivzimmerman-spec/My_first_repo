@@ -40,6 +40,7 @@ import SliderInput from "../SliderInput";
 import { Switch, Segmented } from "../Toggle";
 import VerdictBanner from "../VerdictBanner";
 import RiskGauges from "../RiskGauges";
+import { track } from "@/lib/track";
 import ComboView from "../ComboView";
 import { comboCurve, type ComboPoint } from "@/lib/combo";
 
@@ -189,6 +190,9 @@ export default function Planner({
   useEffect(() => {
     onStateChange?.({ profile, answers, step });
   }, [profile, answers, step, onStateChange]);
+  useEffect(() => {
+    track({ type: "step", step: step + 1 });
+  }, [step]);
 
   const set = <K extends keyof Profile>(key: K, value: Profile[K]) => {
     setProfile((p) => (p[key] === value ? p : { ...p, [key]: value }));
@@ -331,7 +335,10 @@ export default function Planner({
               {onOpenSimulator && (
                 <button
                   type="button"
-                  onClick={() => onOpenSimulator(decision.inputs)}
+                  onClick={() => {
+                    track({ type: "toSimulator" });
+                    onOpenSimulator(decision.inputs);
+                  }}
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
                 >
                   לשחק עם כל הפרטים בסימולטור המלא ←
@@ -857,7 +864,10 @@ function StepPlan({
         </ul>
         <button
           type="button"
-          onClick={() => onCopy(summary)}
+          onClick={() => {
+            track({ type: "planCopy" });
+            onCopy(summary);
+          }}
           className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-700"
         >
           {copied === "ok" ? <Check size={16} /> : <Copy size={16} />}
@@ -867,6 +877,7 @@ function StepPlan({
           <button
             type="button"
             onClick={async () => {
+              track({ type: "planLink" });
               const url = new URL(window.location.href);
               url.hash = "plan";
               if (await copyText(url.toString())) {
@@ -968,7 +979,10 @@ function StepAI({
         />
         <button
           type="button"
-          onClick={() => onCopy(prompt)}
+          onClick={() => {
+            track({ type: "promptCopy" });
+            onCopy(prompt);
+          }}
           className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-700"
         >
           {copied === "ok" ? <Check size={16} /> : <Copy size={16} />}

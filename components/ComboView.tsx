@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { track } from "@/lib/track";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { SimInputs, SimResult } from "@/lib/calculator";
 import { comboCurve, type ComboPoint } from "@/lib/combo";
@@ -69,7 +70,10 @@ export default function ComboView({
             decimals={0}
             value={share}
             bound={{ min: 0, max: 100, step: 10 }}
-            onChange={(v) => setShare(Math.round(v / 10) * 10)}
+            onChange={(v) => {
+              setShare(Math.round(v / 10) * 10);
+              track({ type: "combo" });
+            }}
             hint={
               chosen.value === null
                 ? `${formatILS((start * share) / 100)} לא מספיקים לדירה (מינימום ₪200,000).`

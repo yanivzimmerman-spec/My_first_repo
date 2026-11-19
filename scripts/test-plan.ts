@@ -189,5 +189,21 @@ ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0,
   ok(evil!.profile.cash === 3_000_000 && evil!.profile.home === "none" && evil!.profile.risk === 2 && evil!.answers.age === undefined && evil!.step === 0, "values from a link are clamped and validated");
 }
 
+// Usage counts
+{
+  const { applyEvent, buildReport } = await import("../lib/track.ts");
+  const base: import("../lib/track.ts").VisitorSummary = { first: "a", last: "a", visits: 1, cards: {}, guideCard: 0, guideLink: 0, maxStep: 0, steps: {}, promptCopy: 0, planCopy: 0, planLink: 0, toSimulator: 0, share: 0, combo: 0 };
+  const seen = new Set<number>();
+  let v = base;
+  for (const e of [{ type: "card", id: "upgrade" }, { type: "card", id: "upgrade" }, { type: "guideCard" }, { type: "step", step: 1 }, { type: "step", step: 2 }, { type: "step", step: 1 }, { type: "step", step: 4 }, { type: "promptCopy" }] as const)
+    v = applyEvent(v, e as never, seen);
+  ok(v.cards.upgrade === 2 && v.guideCard === 1 && v.maxStep === 4 && v.steps["1"] === 1 && v.promptCopy === 1, "events add up; a step counts once per visit");
+  ok(base.cards && Object.keys(base.cards).length === 0, "summary is not mutated in place");
+  const r = buildReport([v, { ...base, cards: { firstHome: 1 } }, { ...base, maxStep: 6, guideLink: 1 }]);
+  ok(r.visitors === 3 && r.usedCards === 2 && r.openedGuide === 2 && r.viaCard === 1 && r.viaLink === 1, "report: entry points");
+  ok(JSON.stringify(r.funnel) === JSON.stringify([2, 2, 2, 2, 1, 1]), "report: funnel by highest step");
+  ok(buildReport([]).visitors === 0, "empty report");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll planner tests passed");

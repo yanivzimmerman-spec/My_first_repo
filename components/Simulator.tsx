@@ -18,6 +18,8 @@ import RiskGauges from "./RiskGauges";
 import ComboView from "./ComboView";
 import SituationPicker from "./SituationPicker";
 import Planner from "./plan/Planner";
+import StatsView from "./StatsView";
+import { track, startTracking } from "@/lib/track";
 import { profileFromInputs, encodePlan, decodePlan, type Profile, type PlanState } from "@/lib/plan";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
@@ -99,11 +101,11 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
   }, [inputs]);
 
   // Second page: the mixed strategy, reached through #combo (works in plain links and the artifact viewer)
-  const [view, setView] = useState<"main" | "combo" | "plan">("main");
+  const [view, setView] = useState<"main" | "combo" | "plan" | "stats">("main");
   useEffect(() => {
     const read = () => {
       const h = window.location.hash;
-      const next = h === "#combo" ? "combo" : h === "#plan" && withGuide ? "plan" : "main";
+      const next = h === "#combo" ? "combo" : h === "#plan" && withGuide ? "plan" : h === "#stats" && withGuide ? "stats" : "main";
       setView((prev) => {
         if (prev !== next) window.scrollTo({ top: 0 });
         return next;
@@ -141,7 +143,20 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
     setInputs((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
   }, []);
 
+  // Alpha: anonymous usage counts, and a stats link that only the owner and editors see
+  const [canSeeStats, setCanSeeStats] = useState(false);
+  useEffect(() => {
+    if (!withGuide) return;
+    startTracking();
+    const c = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
+    c?.use("user")
+      .then((u) => (u as { canEdit(): Promise<boolean> } | null)?.canEdit())
+      .then((ok) => setCanSeeStats(!!ok))
+      .catch(() => {});
+  }, [withGuide]);
+
   const share = async () => {
+    track({ type: "share" });
     const q = inputsToQuery(inputs);
     const plan = new URLSearchParams(window.location.search).get("plan");
     const all = [q, plan ? `plan=${plan}` : ""].filter(Boolean).join("&");
@@ -221,7 +236,9 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
         />
       </header>
 
-      {view === "combo" ? (
+      {view === "stats" ? (
+        <StatsView />
+      ) : view === "combo" ? (
         <ComboView inputs={result.inputs} result={result} dark={theme === "dark"} />
       ) : (
         <>
@@ -329,6 +346,11 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
             {emailCopied ? <Check size={15} /> : <Copy size={15} />}
             {emailCopied ? "הכתובת הועתקה" : "העתקת הכתובת"}
           </button>
+          {canSeeStats && (
+            <a href="#stats" className="px-3 py-2 text-sm text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">
+              נתוני שימוש (לנו)
+            </a>
+          )}
         </div>
       </footer>
     </div>

@@ -5,6 +5,7 @@ import type { SimInputs } from "@/lib/calculator";
 import { SITUATIONS, matchSituation, situationInputs, type Situation } from "@/lib/presets";
 import { SOURCES } from "@/lib/sources";
 import { formatCompactILS as c } from "@/lib/format";
+import { track } from "@/lib/track";
 
 const ICONS: Record<Situation["icon"], typeof Home> = {
   home: Home,
@@ -61,6 +62,7 @@ export default function SituationPicker({
               aria-checked={active}
               title={s.description}
               onClick={() => {
+                track({ type: "card", id: s.id });
                 const next = situationInputs(s);
                 (Object.keys(next) as (keyof SimInputs)[]).forEach((k) => set(k, next[k] as SimInputs[typeof k]));
               }}
@@ -85,6 +87,7 @@ export default function SituationPicker({
         {guideHref && (
           <a
             href={guideHref}
+            onClick={() => track({ type: "guideCard" })}
             className="col-span-2 flex items-center gap-2.5 rounded-xl border border-dashed border-slate-300 p-2.5 text-right transition hover:border-slate-500 sm:gap-3 sm:p-3 lg:col-span-3"
           >
             <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600 sm:grid">
