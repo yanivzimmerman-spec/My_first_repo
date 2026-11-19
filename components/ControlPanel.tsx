@@ -171,7 +171,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
                 {inputs.sellFirst
                   ? "כשקונים אין לכם דירה, לכן הבנק מממן עד 75%."
-                  : "קונים כשהדירה הישנה עדיין שלכם: הבנק מממן עד 70%, וצריך למכור אותה תוך 24 חודשים. עד אז הכסף מגיע מחסכונות או מהלוואת גישור."}
+                  : `קונים כשהדירה הישנה עדיין שלכם: הבנק מממן עד 70%, וצריך למכור אותה תוך 24 חודשים. עד המכירה אפשר להשתמש רק בהלוואת גישור (כל ההלוואות על הדירה הישנה עד 50% משוויה), כלומר ${formatILS(re.oldHomeUsableAtPurchase)} מכסף המכירה. השאר מגיע אחרי המכירה ומושקע במדד.`}
               </p>
             </div>
             <p className="text-[13px] leading-relaxed text-slate-600">
@@ -393,7 +393,8 @@ export default function ControlPanel({ inputs, result, set }: Props) {
                     : "bg-emerald-50 text-emerald-800"
               }`}
             >
-              ההחזר החודשי הוא {formatPct(re.paymentToIncome * 100, 0)} מההכנסה.{" "}
+              ההחזר על המשכנתא הוא {re.paymentToIncome >= 10 ? "יותר מכל" : formatPct(re.paymentToIncome * 100, 0)} מההכנסה הפנויה
+              (אחרי הלוואות אחרות ושכר דירה שאתם משלמים).{" "}
               {re.paymentToIncome > PTI_MAX
                 ? "מעל 50%: הבנק לא יאשר. נסו דירה זולה יותר או תקופה ארוכה יותר."
                 : re.paymentToIncome > PTI_WARN

@@ -1,7 +1,7 @@
 /* Sanity + fuzz tests for lib/calculator.ts — run with `npm test`. */
 import {
   simulate, purchaseTax, spitzerPayment, sanitizeInputs, maxAffordablePrice, buyingCosts, sellingCostRate,
-  monthlyRentTax, surtax, breakEvenAppreciation, BOUNDS, DEFAULT_INPUTS,
+  monthlyRentTax, surtax, breakEvenAppreciation, purchaseCash, paymentToIncome, BOUNDS, DEFAULT_INPUTS,
   type SimInputs,
 } from "../lib/calculator.ts";
 
@@ -108,6 +108,26 @@ ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested,
   ok(none.realEstate.oldHomeNetProceeds === 0, "old home ignored unless upgrader");
   const under = simulate({ ...DEFAULT_INPUTS, apartmentType: "upgrader", equity: 0, oldHomeValue: 600_000, oldHomeMortgage: 600_000 });
   ok(near(under.realEstate.startCapital, 200_000, 0.01), "fully mortgaged old home → cash raised to the ₪200K minimum");
+}
+
+// Buy-first upgrader: before the sale only a bridge loan (all loans on the old home ≤ 50% of its value)
+{
+  const base = { ...DEFAULT_INPUTS, apartmentType: "upgrader" as const, equity: 600_000, oldHomeValue: 2_000_000, oldHomeMortgage: 500_000, autoPrice: true };
+  const buyFirst = simulate({ ...base, sellFirst: false });
+  const sellFirst = simulate({ ...base, sellFirst: true });
+  ok(near(purchaseCash({ ...base, sellFirst: false }), 600_000 + 500_000, 0.01), "buy first: savings + bridge of 50%×₪2M − ₪500K = ₪1.1M usable");
+  ok(buyFirst.realEstate.maxPrice < sellFirst.realEstate.maxPrice, "buy first can afford less than sell first");
+  ok(near(buyFirst.points[0].sp500, sellFirst.points[0].sp500, 0.01), "both start with the same own money");
+  ok(buyFirst.realEstate.sideFundValue > 0, "old-home money arriving after the sale is invested");
+}
+
+// Payment-to-income per Directive 329 annex: mortgage ÷ (income − other loans > 18 months − rent paid)
+{
+  const inp = { ...DEFAULT_INPUTS, incomeCheck: true, monthlyIncome: 25_000, loanEnabled: true, loanAmount: 200_000, loanRate: 8, loanTerm: 7 };
+  const loanPmt = spitzerPayment(200_000, 8, 7);
+  ok(near(paymentToIncome(inp, 9_500, loanPmt), 9_500 / (25_000 - loanPmt), 1e-9), "PTI: other loan reduces income, not added to payment");
+  ok(near(paymentToIncome({ ...inp, ownRentPaid: 6_000 }, 9_500, loanPmt), 9_500 / (25_000 - loanPmt - 6_000), 1e-9), "PTI: rent paid elsewhere reduces disposable income");
+  ok(paymentToIncome({ ...inp, monthlyIncome: 5_000, ownRentPaid: 6_000 }, 9_500, loanPmt) === 10, "PTI: no disposable income → clear fail");
 }
 
 // Loan to invest in the S&P

@@ -233,6 +233,8 @@ export interface RealEstateSummary {
   /** Own money at the start (cash + net proceeds from the old home) */
   startCapital: number;
   oldHomeNetProceeds: number;
+  /** Part of the old-home money usable on purchase day (all of it when selling first) */
+  oldHomeUsableAtPurchase: number;
   oldHomeSellingCosts: number;
   /** Old home value is above the sole-apartment exemption ceiling (partial tax not modelled) */
   oldHomeAboveCeiling: boolean;
@@ -467,9 +469,36 @@ export function startCapital(inputs: SimInputs): number {
   return inputs.equity + oldHomeProceeds(inputs).net;
 }
 
-/** Cash available for the purchase: own money plus the optional down-payment loan. */
+/**
+ * Money from the old home that can be used on purchase day. Selling first: all of it.
+ * Buying first: until the sale only a bridge loan on the old home is allowed, with all
+ * loans on it capped at 50% of its value (Directive 329 Q&A 2.6); the rest arrives at
+ * the sale and is invested in the apartment track's index fund.
+ */
+export function oldHomeUsableAtPurchase(inputs: SimInputs): number {
+  const { net } = oldHomeProceeds(inputs);
+  if (inputs.apartmentType !== "upgrader" || inputs.sellFirst) return net;
+  const bridge = Math.max(0, 0.5 * inputs.oldHomeValue - Math.min(inputs.oldHomeMortgage, inputs.oldHomeValue));
+  return Math.min(net, bridge);
+}
+
+/** Cash available for the purchase: own money (usable on the day) plus the optional down-payment loan. */
 export function purchaseCash(inputs: SimInputs): number {
-  return startCapital(inputs) + (inputs.loanEnabled ? inputs.loanAmount : 0);
+  return inputs.equity + oldHomeUsableAtPurchase(inputs) + (inputs.loanEnabled ? inputs.loanAmount : 0);
+}
+
+/**
+ * Payment-to-income per Directive 329 annex A: the new mortgage payment divided by
+ * disposable income = net income − other loans with more than 18 months left − rent the
+ * buyer pays when not living in the purchased apartment. Expected rent from the new
+ * apartment is not counted (banks recognise only part of it, case by case).
+ * Returns 10 (a clear fail) when disposable income is zero or negative.
+ */
+export function paymentToIncome(inputs: SimInputs, mortgagePayment: number, otherLoanPayment: number): number {
+  const otherLoans = inputs.loanEnabled && inputs.loanTerm * 12 > 18 ? otherLoanPayment : 0;
+  const rentPaid = inputs.apartmentType === "additional" ? 0 : inputs.ownRentPaid;
+  const disposable = inputs.monthlyIncome - otherLoans - rentPaid;
+  return disposable > 0 ? mortgagePayment / disposable : 10;
 }
 
 /** Price used in the simulation: the user's choice (or the maximum in auto mode), never above the bank limit. */
@@ -526,7 +555,9 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const equityShortfall = downPaymentRaw <= 0;
   const downPayment = Math.max(0, Math.min(price, downPaymentRaw));
   const loanAmount = Math.max(0, price - downPaymentRaw);
-  const unusedCash = Math.max(0, downPaymentRaw - price);
+  // Old-home money that arrives only after the sale (buy-first upgrader) + cash beyond the price
+  const laterOldHomeCash = old.net - oldHomeUsableAtPurchase(inputs);
+  const unusedCash = Math.max(0, downPaymentRaw - price) + laterOldHomeCash;
   const maxLtv = maxLtvFor(apartmentType, inputs.sellFirst);
   const ltv = price > 0 ? loanAmount / price : 0;
   const pmt = spitzerPayment(loanAmount, mortgageRate, mortgageTerm);
@@ -731,6 +762,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     apartmentType,
     startCapital: equity,
     oldHomeNetProceeds: old.net,
+    oldHomeUsableAtPurchase: oldHomeUsableAtPurchase(inputs),
     oldHomeSellingCosts: old.sellingCosts,
     oldHomeAboveCeiling: apartmentType === "upgrader" && inputs.oldHomeValue > SHEVACH_SINGLE_CEILING,
     propertyPrice: price,
@@ -749,10 +781,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     extraLoanPayment: extraPmt,
     extraLoanInterestPaid: extraInterest,
     extraLoanRemaining: extraBalance,
-    // Loans with more than 18 months left count against income
-    paymentToIncome: inputs.incomeCheck
-      ? (pmt + (inputs.loanEnabled && inputs.loanTerm * 12 > 18 ? extraPmt : 0)) / inputs.monthlyIncome
-      : null,
+    paymentToIncome: inputs.incomeCheck ? paymentToIncome(inputs, pmt, extraPmt) : null,
     initialMonthlyRentGross: initialRentGross,
     initialMonthlyRentNet: initialRentNet,
     initialMonthlyGap: initialGap,

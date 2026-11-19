@@ -100,7 +100,14 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   const start = expectedStart(inp);
   check(near(re.startCapital, start, 0.01) && near(sp.initialInvestment, start, 0.01), "start capital = cash + net old-home proceeds", ctx);
   check(start >= 200_000 - 0.01, "start capital ≥ ₪200K", ctx);
-  const cash = start + (inp.loanEnabled ? inp.loanAmount : 0);
+  // Buy-first upgrader: only a bridge loan on the old home (all loans on it ≤ 50% of its value) before the sale
+  const oldNet = start - inp.equity;
+  const usableOld =
+    inp.apartmentType === "upgrader" && !inp.sellFirst
+      ? Math.min(oldNet, Math.max(0, 0.5 * inp.oldHomeValue - Math.min(inp.oldHomeMortgage, inp.oldHomeValue)))
+      : oldNet;
+  const later = oldNet - usableOld;
+  const cash = inp.equity + usableOld + (inp.loanEnabled ? inp.loanAmount : 0);
   const months = inp.years * 12;
 
   // 1. Everything finite
@@ -124,6 +131,7 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   // 3. Upfront cash conservation
   const unused = Math.max(0, cash - re.purchaseTax - re.closingCosts - re.propertyPrice);
   check(near(re.downPayment + re.purchaseTax + re.closingCosts + unused, cash, 0.01), "upfront cash adds up", ctx);
+  check(near(re.oldHomeUsableAtPurchase, usableOld, 0.01) && later >= -0.01, "buy first: only the bridge is usable before the sale", ctx);
   check(near(re.loanAmount, re.propertyPrice - re.downPayment, 0.01), "mortgage = price − down payment", ctx);
   check(near(re.purchaseTax, purchaseTax(re.propertyPrice, inp.apartmentType), 0.01), "purchase tax by type", ctx);
   check(near(re.closingCosts, buyingCosts(re.propertyPrice, inp.useBroker), 0.01), "buying costs", ctx);
