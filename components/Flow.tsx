@@ -16,7 +16,6 @@ import { profileFromInputs, type Profile } from "@/lib/plan";
 import { track, startTracking, PRIVACY_NOTE } from "@/lib/track";
 import { formatILS } from "@/lib/format";
 import SituationPicker from "./SituationPicker";
-import SliderInput from "./SliderInput";
 import VerdictBanner, { VerdictDetails, verdictText } from "./VerdictBanner";
 import ScenarioRange from "./ScenarioRange";
 import RiskGauges from "./RiskGauges";
@@ -25,16 +24,51 @@ import GrowthChart from "./GrowthChart";
 import Breakdown from "./Breakdown";
 import RisksCard from "./RisksCard";
 import ComboView from "./ComboView";
-import ControlPanel from "./ControlPanel";
+import ControlPanel, { type PanelSection } from "./ControlPanel";
 import Planner from "./plan/Planner";
 import StatsView from "./StatsView";
 
 const FEEDBACK_EMAIL = "yanivzimmerman@gmail.com";
 const START: SimInputs = { ...DEFAULT_INPUTS, ...situationInputs(SITUATIONS[0]) };
-const STAGES = ["המצב שלכם", "הנתונים", "התוצאה"] as const;
-type View = "pick" | "basics" | "result" | "plan" | "stats";
+type QView = "money" | "home" | "market" | "extras";
+type View = "pick" | QView | "result" | "plan" | "stats";
 
-const VIEW_OF: Record<string, View> = { "": "pick", "#basics": "basics", "#result": "result", "#plan": "plan", "#stats": "stats" };
+/** The questions, one screen each; every option of the full simulator is asked along the way. */
+const QUESTIONS: { view: QView; name: string; title: string; intro: string; sections: PanelSection[] }[] = [
+  {
+    view: "money",
+    name: "הכסף",
+    title: "כמה כסף יש לכם, ולכמה זמן?",
+    intro: "מילאנו מספרים של משפחה טיפוסית במצב שבחרתם. שנו אותם לשלכם.",
+    sections: ["situation", "money"],
+  },
+  {
+    view: "home",
+    name: "הדירה",
+    title: "הדירה והמשכנתא",
+    intro: "מחיר, משכנתא, שכר דירה ועליית מחירים. הריבית נקבעת לפי אורך המשכנתא, ואפשר לשנות.",
+    sections: ["apartment"],
+  },
+  {
+    view: "market",
+    name: "התחזית",
+    title: "מה אתם מצפים מהשוק?",
+    intro: "בחרו כמה אתם שמרנים. אפשר גם לכוונן את תשואת המדד ואת שער הדולר.",
+    sections: ["risk", "sp"],
+  },
+  {
+    view: "extras",
+    name: "תוספות",
+    title: "רוצים להוסיף משהו?",
+    intro: "הלוואות, מסלולי משכנתא, התחדשות עירונית ובדיקת הבנק. כל תוספת נפתחת רק אם תבחרו בה. אפשר גם לדלג.",
+    sections: ["addons", "advanced"],
+  },
+];
+const ORDER: View[] = ["pick", ...QUESTIONS.map((q) => q.view), "result"];
+const STAGES = ["המצב", ...QUESTIONS.map((q) => q.name), "התוצאה"];
+
+const VIEW_OF: Record<string, View> = { "": "pick", "#result": "result", "#plan": "plan", "#stats": "stats" };
+for (const q of QUESTIONS) VIEW_OF[`#${q.view}`] = q.view;
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -124,7 +158,7 @@ export default function Flow() {
     }
   };
   const back = () => {
-    const prev = trail[trail.length - 1] ?? (view === "result" ? "basics" : "pick");
+    const prev = trail[trail.length - 1] ?? ORDER[Math.max(0, ORDER.indexOf(view) - 1)] ?? "pick";
     setTrail((t) => t.slice(0, -1));
     go(prev, false);
   };
@@ -184,9 +218,9 @@ export default function Flow() {
     setTimeout(() => setCopied("idle"), 2200);
   };
 
-  const stageIndex = view === "pick" ? 0 : view === "basics" ? 1 : 2;
+  const stageIndex = Math.max(0, ORDER.indexOf(view));
   useEffect(() => {
-    if (view === "pick" || view === "basics" || view === "result") setFurthest((f) => Math.max(f, stageIndex));
+    if (ORDER.includes(view)) setFurthest((f) => Math.max(f, stageIndex));
   }, [view, stageIndex]);
   const backButton = (label: string) => (
     <button
@@ -239,7 +273,7 @@ export default function Flow() {
             </div>
             {view !== "stats" && (
               <nav aria-label="שלבים" className="mt-5">
-                <ol className="grid grid-cols-3 gap-1.5">
+                <ol className="grid grid-cols-6 gap-1">
                   {STAGES.map((name, i) => {
                     const reachable = i <= furthest;
                     return (
@@ -247,13 +281,13 @@ export default function Flow() {
                         <button
                           type="button"
                           disabled={!reachable}
-                          onClick={() => go(i === 0 ? "pick" : i === 1 ? "basics" : "result")}
+                          onClick={() => go(ORDER[i])}
                           aria-current={i === stageIndex ? "step" : undefined}
                           className="block w-full text-right disabled:cursor-default"
                         >
                           <span className={`block h-1.5 rounded-full ${i <= stageIndex ? "bg-slate-900" : "bg-slate-200"}`} />
-                          <span className={`mt-1.5 block text-[12.5px] ${i === stageIndex ? "font-semibold text-slate-900" : "text-slate-500"}`}>
-                            {i + 1}. {name}
+                          <span className={`mt-1.5 block truncate text-[11.5px] sm:text-[12.5px] ${i === stageIndex ? "font-semibold text-slate-900" : "text-slate-500"}`}>
+                            {name}
                           </span>
                         </button>
                       </li>
@@ -279,65 +313,56 @@ export default function Flow() {
                   set={set}
                   guideHref="#plan"
                   onGuide={() => go("plan")}
-                  onPick={() => go("basics")}
+                  onPick={() => go("money")}
                 />
               </section>
             )}
 
-            {/* ---------- 2. A few numbers ---------- */}
-            {view === "basics" && (
-              <>
-              {backButton("חזרה לבחירת המצב")}
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-                <p className="text-[13px] font-semibold text-slate-500">{situation?.title ?? "המצב שלכם"}</p>
-                <h1 className="mt-1 text-2xl font-bold text-slate-900">כמה נתונים, וזהו</h1>
-                <p className="mt-1 text-[14px] text-slate-600">מילאנו מספרים של משפחה טיפוסית. שנו אותם לשלכם.</p>
-                <div className="mt-6 space-y-6">
-                  {x.apartmentType === "upgrader" && (
-                    <>
-                      <SliderInput label="כמה שווה הדירה שלכם היום?" kind="currency" value={x.oldHomeValue} bound={BOUNDS.oldHomeValue} onChange={(v) => set("oldHomeValue", v)} />
-                      <SliderInput label="כמה נשאר עליה במשכנתא?" kind="currency" value={x.oldHomeMortgage} bound={BOUNDS.oldHomeMortgage} onChange={(v) => set("oldHomeMortgage", v)} />
-                    </>
-                  )}
-                  {x.apartmentType === "additional" && x.liveInNew && !x.liveElsewhere && (
-                    <SliderInput label="כמה שווה הדירה שלכם היום?" kind="currency" value={x.oldHomeValue} bound={BOUNDS.oldHomeValue} onChange={(v) => set("oldHomeValue", v)} />
-                  )}
-                  <SliderInput
-                    label={x.apartmentType === "upgrader" ? "כמה כסף יש לכם בנוסף?" : "כמה כסף יש לכם להשקיע?"}
-                    hint={x.apartmentType === "upgrader" ? "מעבר למה שיישאר ממכירת הדירה" : undefined}
-                    kind="currency"
-                    value={x.equity}
-                    bound={BOUNDS.equity}
-                    onChange={(v) => set("equity", v)}
-                  />
-                  <SliderInput
-                    label="מחיר הדירה שאתם שוקלים"
-                    kind="currency"
-                    value={re.propertyPrice}
-                    bound={{ ...BOUNDS.propertyPrice, max: Math.max(BOUNDS.propertyPrice.min + 10_000, re.maxPrice) }}
-                    onChange={(v) => {
-                      set("autoPrice", false);
-                      set("propertyPrice", v);
-                    }}
-                    hint={`הבנק יממן עד ${formatILS(re.maxPrice)} עם הכסף הזה`}
-                  />
-                  <SliderInput label="לכמה שנים?" kind="years" value={x.years} bound={BOUNDS.years} onChange={(v) => set("years", v)} />
+            {/* ---------- 2–5. The questions, one screen each ---------- */}
+            {QUESTIONS.map((q, qi) =>
+              view !== q.view ? null : (
+                <div key={q.view}>
+                  {backButton("חזרה")}
+                  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <div className="px-5 pt-5 sm:px-6 sm:pt-6">
+                      <p className="text-[13px] font-semibold text-slate-500">
+                        שאלה {qi + 1} מתוך {QUESTIONS.length} · {situation?.title ?? "מצב מותאם"}
+                      </p>
+                      <h1 className="mt-1 text-2xl font-bold text-slate-900">{q.title}</h1>
+                      <p className="mt-1 text-[14px] leading-relaxed text-slate-600">{q.intro}</p>
+                    </div>
+                    <div className="[&>div]:rounded-none [&>div]:border-0">
+                      <ControlPanel
+                        inputs={result.inputs}
+                        result={result}
+                        set={set}
+                        situationLabel={situation?.title ?? null}
+                        sections={q.sections}
+                      />
+                    </div>
+                  </section>
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => go(qi + 1 < QUESTIONS.length ? QUESTIONS[qi + 1].view : "result")}
+                      className="rounded-full bg-slate-900 px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-slate-700"
+                    >
+                      {qi + 1 < QUESTIONS.length ? `הבא: ${QUESTIONS[qi + 1].name} ←` : "הצג תוצאה ←"}
+                    </button>
+                    {qi + 1 < QUESTIONS.length && (
+                      <button type="button" onClick={() => go("result")} className="px-2 py-2 text-[14px] text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">
+                        דלגו לתוצאה, השאר כמו שהוא
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => go("result")}
-                  className="mt-7 w-full rounded-full bg-slate-900 px-5 py-3 text-[15px] font-semibold text-white transition hover:bg-slate-700"
-                >
-                  הצג תוצאה ←
-                </button>
-              </section>
-              </>
+              ),
             )}
 
             {/* ---------- 3. The answer, details folded ---------- */}
             {view === "result" && scenarios && (
               <div className="space-y-3">
-                {backButton("חזרה לנתונים")}
+                {backButton("חזרה")}
                 <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenR} details={false} />
                 <Fold title="למה זה יצא ככה?" hint="מה הכריע, ומה צריך לקרות כדי שזה יתהפך">
                   <div className="px-2">
@@ -397,8 +422,8 @@ export default function Flow() {
                   <button type="button" onClick={() => go("pick")} className="px-3 py-2 text-[14px] text-slate-600 hover:text-slate-900">
                     בחירת מצב אחר
                   </button>
-                  <button type="button" onClick={() => go("basics")} className="px-3 py-2 text-[14px] text-slate-600 hover:text-slate-900">
-                    שינוי הנתונים
+                  <button type="button" onClick={() => go("money")} className="px-3 py-2 text-[14px] text-slate-600 hover:text-slate-900">
+                    לעבור שוב על השאלות
                   </button>
                 </div>
               </div>

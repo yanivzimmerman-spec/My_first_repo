@@ -19,7 +19,13 @@ interface Props {
   set: <K extends keyof SimInputs>(key: K, value: SimInputs[K]) => void;
   /** The situation cards above already ask these questions: show one summary line instead */
   situationLabel?: string | null;
+  /** Show only these parts (the step-by-step version asks them one screen at a time) */
+  sections?: PanelSection[];
+  /** Open the advanced settings from the start */
+  advancedOpen?: boolean;
 }
+
+export type PanelSection = "situation" | "money" | "risk" | "apartment" | "sp" | "addons" | "advanced";
 
 const TYPE_TEXT: Record<ApartmentType, string> = {
   single: "זו תהיה הדירה היחידה שלכם. מס רכישה נמוך, ואין מס שבח כשמוכרים (עד ₪5,008,000). הבנק מממן עד 75%.",
@@ -134,8 +140,9 @@ function RiskMeter({ inputs, set }: { inputs: SimInputs; set: Props["set"] }) {
   );
 }
 
-export default function ControlPanel({ inputs, result, set, situationLabel }: Props) {
-  const [advanced, setAdvanced] = useState(false);
+export default function ControlPanel({ inputs, result, set, situationLabel, sections, advancedOpen = false }: Props) {
+  const [advanced, setAdvanced] = useState(advancedOpen);
+  const show = (s: PanelSection) => !sections || sections.includes(s);
   const [situationOpen, setSituationOpen] = useState(false);
   const compact = situationLabel !== undefined && !situationOpen;
   const re = result.realEstate;
@@ -160,6 +167,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel }: Pr
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
       {/* ---------------- 1. Situation (everything below depends on it) ---------------- */}
+      {show("situation") && (
       <Group title="המצב שלכם">
         {situationLabel !== undefined && (
           <div className="flex items-center justify-between gap-3">
@@ -322,8 +330,10 @@ export default function ControlPanel({ inputs, result, set, situationLabel }: Pr
         )}
 
       </Group>
+      )}
 
       {/* ---------------- 2. Money and time ---------------- */}
+      {show("money") && (
       <Group title="הכסף והזמן">
         <SliderInput
           label={type === "upgrader" ? "כמה כסף יש לכם, בנוסף לדירה?" : "כמה כסף יש לכם?"}
@@ -348,13 +358,17 @@ export default function ControlPanel({ inputs, result, set, situationLabel }: Pr
           onChange={(v) => set("years", Math.round(v))}
         />
       </Group>
+      )}
 
       {/* ---------------- 3. Assumptions about the future ---------------- */}
+      {show("risk") && (
       <Group title="כמה אתם שמרנים?">
         <RiskMeter inputs={inputs} set={set} />
       </Group>
+      )}
 
       {/* ---------------- 4. The new apartment ---------------- */}
+      {show("apartment") && (
       <Group title="הדירה החדשה" color={RE}>
         <div>
           <SliderInput
@@ -465,7 +479,9 @@ export default function ControlPanel({ inputs, result, set, situationLabel }: Pr
           hint={`בעוד ${inputs.years} שנה הדירה תהיה שווה כ-${formatCompactILS(futureValue)}. ב-25 השנים האחרונות: כ-4.7% בשנה בממוצע.`}
         />
       </Group>
+      )}
 
+      {show("sp") && (
       <Group title="S&P 500" color={SP}>
         <SliderInput
           label="תשואה שנתית בדולרים"
@@ -496,8 +512,10 @@ export default function ControlPanel({ inputs, result, set, situationLabel }: Pr
           <Sources ids={["sp500Tax", "surtax"]} className="mt-2" />
         </div>
       </Group>
+      )}
 
       {/* ---------------- Optional add-ons ---------------- */}
+      {show("addons") && (
       <Group title="תוספות לבחירתכם">
         <AddOn
           title="להשקיע את ההפרש החודשי"
@@ -716,8 +734,10 @@ export default function ControlPanel({ inputs, result, set, situationLabel }: Pr
           <Sources ids={["boi329"]} />
         </AddOn>
       </Group>
+      )}
 
       {/* ---------------- Advanced ---------------- */}
+      {show("advanced") && (
       <section className="border-t border-slate-100">
         <button
           type="button"
@@ -888,6 +908,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel }: Pr
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }
