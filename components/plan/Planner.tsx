@@ -15,7 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useTheme } from "@/lib/theme";
-import { simulate, breakEvenAppreciation, breakEvenRent, MIN_START_CAPITAL, type SimResult } from "@/lib/calculator";
+import { simulate, breakEvenAppreciation, breakEvenRent, MIN_START_CAPITAL, type SimResult, type SimInputs } from "@/lib/calculator";
 import { RISK_PROFILES } from "@/lib/presets";
 import {
   basics,
@@ -160,10 +160,19 @@ function bestMix(curve: ComboPoint[]): (ComboPoint & { value: number }) | null {
 
 const winnerName = (r: SimResult) => (r.winner === "realEstate" ? "הדירה" : r.winner === "sp500" ? "ה-S&P 500" : null);
 
-export default function Planner() {
+export default function Planner({
+  initialProfile,
+  onOpenSimulator,
+}: {
+  /** Starting values (from the simulator when opened from it) */
+  initialProfile?: Profile;
+  /** Inside the simulator: open the comparison there with all the planner's numbers */
+  onOpenSimulator?: (inputs: SimInputs) => void;
+} = {}) {
   const [theme, toggleTheme] = useTheme();
   const [step, setStep] = useState(0);
-  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [profile, setProfile] = useState<Profile>(initialProfile ?? DEFAULT_PROFILE);
+  const seeded = initialProfile !== undefined;
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
   const [answers, setAnswers] = useState<Answers>({});
@@ -203,7 +212,13 @@ export default function Planner() {
     <div className="mx-auto max-w-[780px] pr-[max(16px,env(safe-area-inset-right,0px))] pl-[max(16px,env(safe-area-inset-left,0px))] pb-16 sm:px-6">
       <header className="pt-8 pb-5 sm:pt-12 sm:pb-7">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[13px] font-semibold text-slate-500">לפני היועץ · טיוטה</p>
+          {onOpenSimulator ? (
+            <a href="#" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900">
+              → נדל״ן מול סנופי
+            </a>
+          ) : (
+            <p className="text-[13px] font-semibold text-slate-500">לפני היועץ · טיוטה</p>
+          )}
           <button
             type="button"
             onClick={toggleTheme}
@@ -250,7 +265,7 @@ export default function Planner() {
       </nav>
 
       <main>
-        {step === 0 && <StepHave p={profile} set={set} b={b} />}
+        {step === 0 && <StepHave p={profile} set={set} b={b} seeded={seeded} />}
         {step === 1 && <StepGoals p={profile} set={set} />}
         {step === 2 && <StepBasics p={profile} set={set} b={b} />}
         {step === 3 &&
@@ -285,6 +300,15 @@ export default function Planner() {
                 </div>
               </section>
               <VerdictBanner result={decision.result} breakEven={decision.be} breakEvenRent={decision.ber} comboLink={false} />
+              {onOpenSimulator && (
+                <button
+                  type="button"
+                  onClick={() => onOpenSimulator(decision.inputs)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                >
+                  לשחק עם כל הפרטים בסימולטור המלא ←
+                </button>
+              )}
               <ComboView inputs={decision.inputs} result={decision.result} curve={decision.curve} dark={theme === "dark"} embedded />
               <LeverageCard r={decision.result} lev={decision.lev} b={b} />
               <RiskGauges result={decision.result} />
@@ -347,7 +371,7 @@ export default function Planner() {
           <button
             type="button"
             onClick={() => {
-              setProfile(DEFAULT_PROFILE);
+              setProfile(initialProfile ?? DEFAULT_PROFILE);
               setPriceOverride(null);
               setAnswers({});
               go(0);
@@ -369,11 +393,15 @@ export default function Planner() {
 
 type SetFn = <K extends keyof Profile>(key: K, value: Profile[K]) => void;
 
-function StepHave({ p, set, b }: { p: Profile; set: SetFn; b: Basics }) {
+function StepHave({ p, set, b, seeded }: { p: Profile; set: SetFn; b: Basics; seeded?: boolean }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
       <h2 className="text-xl font-bold text-slate-900">מה יש לכם היום?</h2>
-      <p className="mt-1 mb-6 text-[14px] text-slate-600">בערך זה מספיק. אפשר לחזור ולתקן בכל שלב.</p>
+      <p className="mt-1 mb-6 text-[14px] text-slate-600">
+        {seeded
+          ? "העברנו את מה שכבר בחרתם בסימולטור. הוסיפו את מה שחסר: השקעות, הלוואות והוצאות."
+          : "בערך זה מספיק. אפשר לחזור ולתקן בכל שלב."}
+      </p>
       <div className="space-y-6">
         <Group title="כסף שכבר יש לכם">
           <SliderInput label="עו״ש, פיקדונות וחסכונות נזילים" kind="currency" value={p.cash} bound={B.cash} onChange={(v) => set("cash", v)} />

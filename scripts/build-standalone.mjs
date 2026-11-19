@@ -7,6 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 const TARGETS = {
   main: { entry: "standalone/entry.tsx", out: "dist/index.html", title: "נדל״ן מול סנופי" },
   plan: { entry: "standalone/plan-entry.tsx", out: "dist/plan.html", title: "לפני היועץ (טיוטה)" },
+  suite: { entry: "standalone/suite-entry.tsx", out: "dist/suite.html", title: "נדל״ן מול סנופי" },
 };
 const target = TARGETS[process.argv[2] ?? "main"];
 if (!target) throw new Error(`Unknown target: ${process.argv[2]}`);

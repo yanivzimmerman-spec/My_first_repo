@@ -17,6 +17,8 @@ import RisksCard from "./RisksCard";
 import RiskGauges from "./RiskGauges";
 import ComboView from "./ComboView";
 import SituationPicker from "./SituationPicker";
+import Planner from "./plan/Planner";
+import { profileFromInputs, type Profile } from "@/lib/plan";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
@@ -50,7 +52,7 @@ async function copyText(text: string): Promise<boolean> {
 /**
  * The published site uses the default.
  */
-export default function Simulator() {
+export default function Simulator({ withGuide = false }: { withGuide?: boolean } = {}) {
   const [inputs, setInputs] = useState<SimInputs>(DEFAULT_INPUTS);
   const [hydrated, setHydrated] = useState(false);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
@@ -90,10 +92,11 @@ export default function Simulator() {
   }, [inputs]);
 
   // Second page: the mixed strategy, reached through #combo (works in plain links and the artifact viewer)
-  const [view, setView] = useState<"main" | "combo">("main");
+  const [view, setView] = useState<"main" | "combo" | "plan">("main");
   useEffect(() => {
     const read = () => {
-      const next = window.location.hash === "#combo" ? "combo" : "main";
+      const h = window.location.hash;
+      const next = h === "#combo" ? "combo" : h === "#plan" && withGuide ? "plan" : "main";
       setView((prev) => {
         if (prev !== next) window.scrollTo({ top: 0 });
         return next;
@@ -102,6 +105,17 @@ export default function Simulator() {
     read();
     window.addEventListener("hashchange", read);
     return () => window.removeEventListener("hashchange", read);
+  }, [withGuide]);
+
+  // Guided path: seeded from the simulator the first time it opens, then kept (hidden) so
+  // going back and forth never loses its answers
+  const [planSeed, setPlanSeed] = useState<Profile | null>(null);
+  useEffect(() => {
+    if (view === "plan" && !planSeed) setPlanSeed(profileFromInputs(inputs));
+  }, [view, planSeed, inputs]);
+  const openInSimulator = useCallback((next: SimInputs) => {
+    setInputs(next);
+    window.location.hash = "";
   }, []);
 
   const set = useCallback(<K extends keyof SimInputs>(key: K, value: SimInputs[K]) => {
@@ -135,7 +149,15 @@ export default function Simulator() {
 
   const shareLabel = copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "שיתוף התוצאה";
 
+  const planner = planSeed && (
+    <div hidden={view !== "plan"}>
+      <Planner initialProfile={planSeed} onOpenSimulator={openInSimulator} />
+    </div>
+  );
   return (
+    <>
+    {planner}
+    {view !== "plan" && (
     <div className="mx-auto max-w-[1180px] pr-[max(16px,env(safe-area-inset-right,0px))] pl-[max(16px,env(safe-area-inset-left,0px))] pb-16 sm:px-6 lg:px-8">
       {/* ---------- Header ---------- */}
       <header className="pt-8 pb-6 sm:pt-12 sm:pb-8">
@@ -163,6 +185,7 @@ export default function Simulator() {
           inputs={result.inputs}
           set={set}
           onReset={sameInputs(inputs, DEFAULT_INPUTS) ? undefined : () => setInputs(DEFAULT_INPUTS)}
+          guideHref={withGuide ? "#plan" : undefined}
         />
       </header>
 
@@ -191,7 +214,7 @@ export default function Simulator() {
       */}
       <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_auto_auto_1fr] lg:items-start lg:gap-8">
         <div className="min-w-0 lg:col-start-2 lg:row-start-1">
-          <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenRentResult} />
+          <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenRentResult} guideLink={withGuide} />
         </div>
 
         <aside
@@ -272,5 +295,7 @@ export default function Simulator() {
         </div>
       </footer>
     </div>
+    )}
+    </>
   );
 }

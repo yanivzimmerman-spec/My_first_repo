@@ -19,7 +19,7 @@ import {
   type SimInputs,
   type SimResult,
 } from "./calculator.ts";
-import { RISK_PROFILES } from "./presets.ts";
+import { RISK_PROFILES, matchRiskProfile } from "./presets.ts";
 
 export type HomeStatus = "none" | "own";
 /** none: "live" = buy to live in, "invest" = buy to rent out and keep renting.
@@ -74,6 +74,32 @@ export const DEFAULT_PROFILE: Profile = {
   risk: 2,
   cushionMonths: 6,
 };
+
+/**
+ * Starting profile for the guided path, from what the user already set in the simulator:
+ * the situation, the horizon, the risk level and the income. The simulator's equity becomes
+ * cash on hand; the guided path then takes the safety cushion out of it, which is the point.
+ */
+export function profileFromInputs(x: SimInputs): Profile {
+  const own = x.apartmentType !== "single";
+  const risk = matchRiskProfile(x);
+  return {
+    ...DEFAULT_PROFILE,
+    cash: x.equity,
+    investments: 0,
+    investmentsGain: 0,
+    hishtalmut: 0,
+    debt: 0,
+    home: own ? "own" : "none",
+    homeValue: x.oldHomeValue,
+    homeMortgage: x.apartmentType === "upgrader" ? x.oldHomeMortgage : DEFAULT_PROFILE.homeMortgage,
+    // Keeping the current home (any additional-apartment mode) is the guided path's "invest" option
+    homePlan: x.apartmentType === "additional" ? "invest" : x.liveInNew ? "live" : "invest",
+    years: x.years,
+    risk: risk >= 0 ? risk : DEFAULT_PROFILE.risk,
+    income: x.monthlyIncome,
+  };
+}
 
 export const PROFILE_BOUNDS = {
   cash: { min: 0, max: 3_000_000, step: 10_000 },

@@ -156,5 +156,27 @@ ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0,
   ok(!advisorPrompt(p, b, { ...d, bestMix: { share: 40, value: top - 1, price: 900_000 } }, {}).includes("שילוב:"), "a mix that doesn't win is left out");
 }
 
+// Seeding the guided path from the simulator
+{
+  const { profileFromInputs } = await import("../lib/plan.ts");
+  const { DEFAULT_INPUTS } = await import("../lib/calculator.ts");
+  const { SITUATIONS, situationInputs } = await import("../lib/presets.ts");
+  const want: Record<string, [string, string]> = {
+    firstHome: ["none", "live"], firstInvest: ["none", "invest"], upgrade: ["own", "live"],
+    secondInvest: ["own", "invest"], moveRentOld: ["own", "invest"], twoRentals: ["own", "invest"],
+  };
+  for (const sit of SITUATIONS) {
+    const x = { ...DEFAULT_INPUTS, ...situationInputs(sit) } as typeof DEFAULT_INPUTS;
+    const pr = profileFromInputs(x);
+    ok(pr.home === want[sit.id][0] && pr.homePlan === want[sit.id][1] && pr.cash === x.equity && pr.years === x.years, `${sit.id} → guided path: ${pr.home}/${pr.homePlan}, same money and years`);
+  }
+  const up = profileFromInputs({ ...DEFAULT_INPUTS, apartmentType: "upgrader", oldHomeValue: 2_500_000, oldHomeMortgage: 300_000 });
+  ok(up.homeValue === 2_500_000 && up.homeMortgage === 300_000, "upgrader's old home carries over");
+  ok(profileFromInputs({ ...DEFAULT_INPUTS, appreciation: 6, rentGrowth: 4, spReturn: 11, fxDrift: 0 }).risk === 4, "risk level carries over");
+  // Guided result opened in the simulator gives the same answer
+  const p = P(); const b = basics(p); const inputs = decisionInputs(p, b, priceRange(p, b).suggested);
+  ok(simulate(inputs).difference === simulate({ ...inputs }).difference, "the simulator gets exactly the guided path's inputs");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll planner tests passed");

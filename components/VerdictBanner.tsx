@@ -88,12 +88,15 @@ export default function VerdictBanner({
   breakEven,
   breakEvenRent,
   comboLink = true,
+  guideLink = false,
 }: {
   result: SimResult;
   breakEven: BreakEven;
   breakEvenRent: BreakEven;
   /** Show the "mix both" link (the planner draft has no combo page) */
   comboLink?: boolean;
+  /** Show the link to the guided path */
+  guideLink?: boolean;
 }) {
   const r = result;
   // Amounts are in shekels of that year; divide by inflation for today's money
@@ -168,6 +171,14 @@ export default function VerdictBanner({
         >
           רוצים לשלב? חלק בדירה וחלק במדד ←
         </a>
+        )}
+        {guideLink && (
+          <a
+            href="#plan"
+            className="mt-2.5 flex items-center gap-1.5 text-[14px] font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+          >
+            ומה עכשיו? לבדוק את הבסיס ולקבל תוכנית מסודרת ←
+          </a>
         )}
       </div>
     </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, KeyRound, Repeat, Plus, ArrowLeftRight, Building2, RotateCcw } from "lucide-react";
+import { Home, KeyRound, Repeat, Plus, ArrowLeftRight, Building2, RotateCcw, Compass } from "lucide-react";
 import type { SimInputs } from "@/lib/calculator";
 import { SITUATIONS, matchSituation, situationInputs, type Situation } from "@/lib/presets";
 import { SOURCES } from "@/lib/sources";
@@ -29,11 +29,14 @@ export default function SituationPicker({
   inputs,
   set,
   onReset,
+  guideHref,
 }: {
   inputs: SimInputs;
   set: <K extends keyof SimInputs>(key: K, value: SimInputs[K]) => void;
   /** Shown when the inputs differ from the defaults */
   onReset?: () => void;
+  /** Extra card that opens the guided path */
+  guideHref?: string;
 }) {
   const current = matchSituation(inputs);
   return (
@@ -79,6 +82,22 @@ export default function SituationPicker({
             </button>
           );
         })}
+        {guideHref && (
+          <a
+            href={guideHref}
+            className="col-span-2 flex items-center gap-2.5 rounded-xl border border-dashed border-slate-300 p-2.5 text-right transition hover:border-slate-500 sm:gap-3 sm:p-3 lg:col-span-3"
+          >
+            <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600 sm:grid">
+              <Compass size={18} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[13.5px] font-semibold leading-snug text-slate-900 sm:text-[14.5px]">לא בטוחים? בואו נעבור על זה יחד</span>
+              <span className="mt-0.5 block text-[11.5px] leading-snug text-slate-500 sm:text-[12.5px]">
+                מה יש לכם, מה עושים קודם, ותוכנית מסודרת בשישה שלבים קצרים
+              </span>
+            </span>
+          </a>
+        )}
       </div>
       <p className="mt-2 text-[12px] text-slate-500">
         מספרים לדוגמה לפי{" "}
