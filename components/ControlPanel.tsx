@@ -17,6 +17,8 @@ interface Props {
   inputs: SimInputs;
   result: SimResult;
   set: <K extends keyof SimInputs>(key: K, value: SimInputs[K]) => void;
+  /** The situation cards above already ask these questions: show one summary line instead */
+  situationLabel?: string | null;
 }
 
 const TYPE_TEXT: Record<ApartmentType, string> = {
@@ -132,8 +134,10 @@ function RiskMeter({ inputs, set }: { inputs: SimInputs; set: Props["set"] }) {
   );
 }
 
-export default function ControlPanel({ inputs, result, set }: Props) {
+export default function ControlPanel({ inputs, result, set, situationLabel }: Props) {
   const [advanced, setAdvanced] = useState(false);
+  const [situationOpen, setSituationOpen] = useState(false);
+  const compact = situationLabel !== undefined && !situationOpen;
   const re = result.realEstate;
   const sp = result.sp500;
   const type = inputs.apartmentType;
@@ -157,6 +161,21 @@ export default function ControlPanel({ inputs, result, set }: Props) {
     <div className="rounded-2xl border border-slate-200 bg-white">
       {/* ---------------- 1. Situation (everything below depends on it) ---------------- */}
       <Group title="המצב שלכם">
+        {situationLabel !== undefined && (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[15px] font-semibold text-slate-900">{situationLabel ?? "שילוב מותאם אישית"}</p>
+            <button
+              type="button"
+              onClick={() => setSituationOpen((o) => !o)}
+              aria-expanded={situationOpen}
+              className="text-[13px] font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+            >
+              {situationOpen ? "סגירה" : "שינוי"}
+            </button>
+          </div>
+        )}
+        {!compact && (
+        <>
         <div>
           <p className="mb-2 text-[15px] text-slate-700">יש לכם כבר דירה?</p>
           <Segmented
@@ -224,6 +243,8 @@ export default function ControlPanel({ inputs, result, set }: Props) {
                 : "משכירים את הדירה החדשה ומקבלים שכר דירה. אתם גרים במקום אחר בשני המסלולים."}
           </p>
         </div>
+        </>
+        )}
 
         {(re.rentsOutOld || re.rentsOutBoth) && (
           <div className="rounded-xl border border-slate-200 p-4">

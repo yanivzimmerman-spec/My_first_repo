@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Share2, Check, Moon, Sun, Mail, Copy } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { DEFAULT_INPUTS, breakEvenAppreciation, breakEvenRent, simulate, BOUNDS, type SimInputs } from "@/lib/calculator";
-import { SCENARIO_DELTAS } from "@/lib/presets";
+import { SCENARIO_DELTAS, SITUATIONS, matchSituation, situationInputs } from "@/lib/presets";
 import { inputsToQuery, queryToInputs } from "@/lib/url";
 import { formatCompactILS, formatILS } from "@/lib/format";
 import ControlPanel from "./ControlPanel";
@@ -18,7 +18,7 @@ import RiskGauges from "./RiskGauges";
 import ComboView from "./ComboView";
 import SituationPicker from "./SituationPicker";
 import Planner from "./plan/Planner";
-import { profileFromInputs, type Profile } from "@/lib/plan";
+import { profileFromInputs, encodePlan, decodePlan, type Profile, type PlanState } from "@/lib/plan";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
@@ -52,8 +52,12 @@ async function copyText(text: string): Promise<boolean> {
 /**
  * The published site uses the default.
  */
+/** The new version starts from the most common case: a first home to live in, with its example numbers. */
+const GUIDED_START: SimInputs = { ...DEFAULT_INPUTS, ...situationInputs(SITUATIONS[0]) };
+
 export default function Simulator({ withGuide = false }: { withGuide?: boolean } = {}) {
-  const [inputs, setInputs] = useState<SimInputs>(DEFAULT_INPUTS);
+  const start = withGuide ? GUIDED_START : DEFAULT_INPUTS;
+  const [inputs, setInputs] = useState<SimInputs>(start);
   const [hydrated, setHydrated] = useState(false);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
   const [emailCopied, setEmailCopied] = useState(false);
@@ -70,7 +74,10 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
   useEffect(() => {
     if (!hydrated || STANDALONE) return;
     const q = inputsToQuery(inputs);
-    const url = `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash}`;
+    // Keep a shared guided plan (?plan=…) next to the simulator's own parameters
+    const plan = new URLSearchParams(window.location.search).get("plan");
+    const all = [q, plan ? `plan=${plan}` : ""].filter(Boolean).join("&");
+    const url = `${window.location.pathname}${all ? `?${all}` : ""}${window.location.hash}`;
     window.history.replaceState(null, "", url);
   }, [inputs, hydrated]);
 
@@ -110,6 +117,18 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
   // Guided path: seeded from the simulator the first time it opens, then kept (hidden) so
   // going back and forth never loses its answers
   const [planSeed, setPlanSeed] = useState<Profile | null>(null);
+  // Shared link with a guided plan (?plan=…): open it as it was
+  const [planFromUrl] = useState<PlanState | undefined>(() =>
+    STANDALONE || typeof window === "undefined" ? undefined : decodePlan(new URLSearchParams(window.location.search).get("plan")),
+  );
+  useEffect(() => {
+    if (planFromUrl && !planSeed) setPlanSeed(planFromUrl.profile);
+  }, [planFromUrl, planSeed]);
+  const savePlanToUrl = useCallback((state: PlanState) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("plan", encodePlan(state));
+    window.history.replaceState(null, "", url.toString());
+  }, []);
   useEffect(() => {
     if (view === "plan" && !planSeed) setPlanSeed(profileFromInputs(inputs));
   }, [view, planSeed, inputs]);
@@ -124,7 +143,9 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
 
   const share = async () => {
     const q = inputsToQuery(inputs);
-    const url = `${window.location.origin}${window.location.pathname}${q ? `?${q}` : ""}`;
+    const plan = new URLSearchParams(window.location.search).get("plan");
+    const all = [q, plan ? `plan=${plan}` : ""].filter(Boolean).join("&");
+    const url = `${window.location.origin}${window.location.pathname}${all ? `?${all}` : ""}`;
     const text = [
       `נדל״ן מול סנופי — ${verdictText(result)}`,
       `🏠 קונים דירה: ${formatILS(result.realEstate.netWorth)} נטו`,
@@ -151,7 +172,13 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
 
   const planner = planSeed && (
     <div hidden={view !== "plan"}>
-      <Planner initialProfile={planSeed} onOpenSimulator={openInSimulator} />
+      <Planner
+        initialProfile={planSeed}
+        onOpenSimulator={openInSimulator}
+        freshProfile={() => profileFromInputs(inputs)}
+        initialState={planFromUrl}
+        onStateChange={STANDALONE ? undefined : savePlanToUrl}
+      />
     </div>
   );
   return (
@@ -184,7 +211,7 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
         <SituationPicker
           inputs={result.inputs}
           set={set}
-          onReset={sameInputs(inputs, DEFAULT_INPUTS) ? undefined : () => setInputs(DEFAULT_INPUTS)}
+          onReset={sameInputs(inputs, start) ? undefined : () => setInputs(start)}
           guideHref={withGuide ? "#plan" : undefined}
         />
       </header>
@@ -221,7 +248,12 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
           aria-label="הנתונים שלכם"
           className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-6 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
         >
-          <ControlPanel inputs={result.inputs} result={result} set={set} />
+          <ControlPanel
+            inputs={result.inputs}
+            result={result}
+            set={set}
+            situationLabel={withGuide ? (SITUATIONS.find((x) => x.id === matchSituation(result.inputs))?.title ?? null) : undefined}
+          />
         </aside>
 
         <div className="min-w-0 lg:col-start-2">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Moon,
   Sun,
@@ -33,6 +33,7 @@ import {
   type Basics,
   type Answers,
   type PromptDecision,
+  type PlanState,
 } from "@/lib/plan";
 import { formatILS, formatCompactILS as c, formatPct } from "@/lib/format";
 import SliderInput from "../SliderInput";
@@ -163,19 +164,31 @@ const winnerName = (r: SimResult) => (r.winner === "realEstate" ? "הדירה" :
 export default function Planner({
   initialProfile,
   onOpenSimulator,
+  freshProfile,
+  initialState,
+  onStateChange,
 }: {
   /** Starting values (from the simulator when opened from it) */
   initialProfile?: Profile;
   /** Inside the simulator: open the comparison there with all the planner's numbers */
   onOpenSimulator?: (inputs: SimInputs) => void;
+  /** The simulator's current values, for "update from the simulator" */
+  freshProfile?: () => Profile;
+  /** A shared plan to open as it was */
+  initialState?: PlanState;
+  /** Called on every change, to keep the plan in the link */
+  onStateChange?: (state: PlanState) => void;
 } = {}) {
   const [theme, toggleTheme] = useTheme();
-  const [step, setStep] = useState(0);
-  const [profile, setProfile] = useState<Profile>(initialProfile ?? DEFAULT_PROFILE);
+  const [step, setStep] = useState(initialState?.step ?? 0);
+  const [profile, setProfile] = useState<Profile>(initialState?.profile ?? initialProfile ?? DEFAULT_PROFILE);
   const seeded = initialProfile !== undefined;
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
-  const [answers, setAnswers] = useState<Answers>({});
+  const [answers, setAnswers] = useState<Answers>(initialState?.answers ?? {});
+  useEffect(() => {
+    onStateChange?.({ profile, answers, step });
+  }, [profile, answers, step, onStateChange]);
 
   const set = <K extends keyof Profile>(key: K, value: Profile[K]) => {
     setProfile((p) => (p[key] === value ? p : { ...p, [key]: value }));
@@ -265,7 +278,22 @@ export default function Planner({
       </nav>
 
       <main>
-        {step === 0 && <StepHave p={profile} set={set} b={b} seeded={seeded} />}
+        {step === 0 && (
+          <StepHave
+            p={profile}
+            set={set}
+            b={b}
+            seeded={seeded}
+            onRefresh={
+              freshProfile
+                ? () => {
+                    setProfile(freshProfile());
+                    setPriceOverride(null);
+                  }
+                : undefined
+            }
+          />
+        )}
         {step === 1 && <StepGoals p={profile} set={set} />}
         {step === 2 && <StepBasics p={profile} set={set} b={b} />}
         {step === 3 &&
@@ -318,6 +346,7 @@ export default function Planner({
           ))}
         {step === 4 && (
           <StepPlan
+            linkable={!!onStateChange}
             p={profile}
             b={b}
             decision={decision}
@@ -393,7 +422,19 @@ export default function Planner({
 
 type SetFn = <K extends keyof Profile>(key: K, value: Profile[K]) => void;
 
-function StepHave({ p, set, b, seeded }: { p: Profile; set: SetFn; b: Basics; seeded?: boolean }) {
+function StepHave({
+  p,
+  set,
+  b,
+  seeded,
+  onRefresh,
+}: {
+  p: Profile;
+  set: SetFn;
+  b: Basics;
+  seeded?: boolean;
+  onRefresh?: () => void;
+}) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
       <h2 className="text-xl font-bold text-slate-900">מה יש לכם היום?</h2>
@@ -401,6 +442,18 @@ function StepHave({ p, set, b, seeded }: { p: Profile; set: SetFn; b: Basics; se
         {seeded
           ? "העברנו את מה שכבר בחרתם בסימולטור. הוסיפו את מה שחסר: השקעות, הלוואות והוצאות."
           : "בערך זה מספיק. אפשר לחזור ולתקן בכל שלב."}
+        {onRefresh && (
+          <>
+            {" "}
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="font-medium text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+            >
+              עדכון מהסימולטור
+            </button>
+          </>
+        )}
       </p>
       <div className="space-y-6">
         <Group title="כסף שכבר יש לכם">
@@ -689,6 +742,7 @@ function ShortfallCard({ b }: { b: Basics }) {
 }
 
 function StepPlan({
+  linkable,
   p,
   b,
   decision,
@@ -705,7 +759,10 @@ function StepPlan({
   } | null;
   copied: "idle" | "ok" | "fail";
   onCopy: (text: string) => void;
+  /** The plan lives in the link: offer to copy it */
+  linkable?: boolean;
 }) {
+  const [linkCopied, setLinkCopied] = useState(false);
   const steps: string[] = [];
   if (b.monthlySaving <= 0) steps.push("לאזן את התקציב החודשי. כל עוד ההוצאות גבוהות מההכנסה, משכנתא או השקעה חודשית לא יחזיקו.");
   steps.push(
@@ -806,6 +863,23 @@ function StepPlan({
           {copied === "ok" ? <Check size={16} /> : <Copy size={16} />}
           {copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "להעתיק את התוכנית"}
         </button>
+        {linkable && (
+          <button
+            type="button"
+            onClick={async () => {
+              const url = new URL(window.location.href);
+              url.hash = "plan";
+              if (await copyText(url.toString())) {
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2200);
+              }
+            }}
+            className="mt-5 ms-2 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700 transition hover:border-slate-500"
+          >
+            {linkCopied ? <Check size={16} /> : <Copy size={16} />}
+            {linkCopied ? "הקישור הועתק" : "קישור לתוכנית"}
+          </button>
+        )}
       </section>
     </div>
   );

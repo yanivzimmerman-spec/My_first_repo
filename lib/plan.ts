@@ -424,3 +424,49 @@ export function advisorPrompt(p: Profile, b: Basics, decision: PromptDecision | 
     .join("\n")
     .replace(/[⁦-⁩]/g, "");
 }
+
+// ---------------------------------------------------------------------------
+// Sharing a guided plan in the link (?plan=…)
+// ---------------------------------------------------------------------------
+
+export interface PlanState {
+  profile: Profile;
+  answers: Answers;
+  step: number;
+}
+
+const toB64 = (s: string) =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const fromB64 = (s: string) =>
+  new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (ch) => ch.charCodeAt(0)));
+
+export function encodePlan(state: PlanState): string {
+  return toB64(JSON.stringify(state));
+}
+
+/** Reads a shared plan; anything missing, malformed or out of range falls back to the defaults. */
+export function decodePlan(raw: string | null | undefined): PlanState | undefined {
+  if (!raw) return undefined;
+  try {
+    const data = JSON.parse(fromB64(raw)) as Partial<PlanState>;
+    const src = (data.profile ?? {}) as Record<string, unknown>;
+    const profile: Profile = { ...DEFAULT_PROFILE };
+    for (const [k, b] of Object.entries(PROFILE_BOUNDS) as [keyof typeof PROFILE_BOUNDS, { min: number; max: number }][]) {
+      const v = Number(src[k]);
+      if (Number.isFinite(v)) (profile[k] as number) = Math.min(b.max, Math.max(b.min, v));
+    }
+    if (src.home === "own" || src.home === "none") profile.home = src.home;
+    if (src.homePlan === "live" || src.homePlan === "invest") profile.homePlan = src.homePlan;
+    if (typeof src.useHishtalmut === "boolean") profile.useHishtalmut = src.useHishtalmut;
+    const risk = Number(src.risk);
+    if (Number.isInteger(risk) && risk >= 0 && risk < RISK_PROFILES.length) profile.risk = risk;
+    const answers: Answers = {};
+    const a = (data.answers ?? {}) as Record<string, unknown>;
+    for (const q of ADVISOR_QUESTIONS) if (typeof a[q.key] === "string" && q.options.includes(a[q.key] as string)) answers[q.key] = a[q.key] as string;
+    if (typeof a.note === "string") answers.note = a.note.slice(0, 500);
+    const step = Number(data.step);
+    return { profile, answers, step: Number.isInteger(step) && step >= 0 && step <= 5 ? step : 0 };
+  } catch {
+    return undefined;
+  }
+}

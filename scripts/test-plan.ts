@@ -178,5 +178,16 @@ ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0,
   ok(simulate(inputs).difference === simulate({ ...inputs }).difference, "the simulator gets exactly the guided path's inputs");
 }
 
+// Shared plan link
+{
+  const { encodePlan, decodePlan } = await import("../lib/plan.ts");
+  const state = { profile: P({ cash: 345_000, home: "own", homePlan: "invest", risk: 3 }), answers: { age: "30–40", note: "בדיקה ✓" }, step: 4 };
+  const back = decodePlan(encodePlan(state));
+  ok(JSON.stringify(back) === JSON.stringify(state), "plan → link → plan, unchanged (Hebrew included)");
+  ok(decodePlan("not-base64!!") === undefined && decodePlan(null) === undefined, "a broken link opens nothing, no crash");
+  const evil = decodePlan(Buffer.from(JSON.stringify({ profile: { cash: 1e15, home: "x", risk: 99 }, answers: { age: "<script>" }, step: 42 })).toString("base64url"));
+  ok(evil!.profile.cash === 3_000_000 && evil!.profile.home === "none" && evil!.profile.risk === 2 && evil!.answers.age === undefined && evil!.step === 0, "values from a link are clamped and validated");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll planner tests passed");
