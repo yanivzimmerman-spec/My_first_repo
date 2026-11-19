@@ -33,7 +33,7 @@ export default function SliderInput({
   onChange,
   kind,
   hint,
-  accent = "#0F172A",
+  accent = "var(--accent-ink)",
   disabled,
   decimals = 2,
 }: Props) {
@@ -61,7 +61,11 @@ export default function SliderInput({
         <div
           dir="ltr"
           className="flex items-center rounded-full px-3 py-1 text-[15px] font-semibold tabular-nums ring-1 ring-transparent transition focus-within:ring-2"
-          style={{ background: `${accent}12`, color: accent, ["--tw-ring-color" as string]: `${accent}55` }}
+          style={{
+            background: `color-mix(in srgb, ${accent} 8%, transparent)`,
+            color: accent,
+            ["--tw-ring-color" as string]: `color-mix(in srgb, ${accent} 33%, transparent)`,
+          }}
         >
           {prefix && <span>{prefix}</span>}
           <input

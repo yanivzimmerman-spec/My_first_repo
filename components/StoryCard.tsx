@@ -59,7 +59,9 @@ export default function StoryCard({ result }: { result: SimResult }) {
                 </>
               ) : (
                 <>
-                  משלמים לבנק {formatILS(reMonthlyOut)}, ומהשכירות נשארים {formatILS(re.initialMonthlyRentNet)}.{" "}
+                  {re.rentsOutOld && <>עוברים לגור בדירה החדשה ומשכירים את הישנה. </>}
+                  משלמים לבנק {formatILS(reMonthlyOut)}, ומהשכירות{re.rentsOutOld ? " של הדירה הישנה" : ""} נשארים{" "}
+                  {formatILS(re.initialMonthlyRentNet)}.{" "}
                 </>
               )}
               {re.initialMonthlyGap > 0.5 ? (
@@ -100,6 +102,7 @@ export default function StoryCard({ result }: { result: SimResult }) {
             </Step>
             <Step when="כל חודש (בשנה הראשונה)">
               {re.livesInNew && <>גרים בשכירות ומשלמים {formatILS(re.initialMonthlyRentGross)}. </>}
+              {re.rentsOutOld && <>ממשיכים לגור בדירה הישנה. </>}
               {sp.loanPrincipal > 0 && <>מחזירים {formatILS(sp.loanPayment)} על ההלוואה. </>}
               {matching ? (
                 sp.initialDeposit > 0.5 ? (

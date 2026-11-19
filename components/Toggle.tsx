@@ -6,7 +6,7 @@ export function Switch({
   checked,
   onChange,
   label,
-  accent = "#0F172A",
+  accent = "var(--accent-ink)",
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
@@ -21,11 +21,11 @@ export function Switch({
       aria-label={label}
       onClick={() => onChange(!checked)}
       className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20"
-      style={{ background: checked ? accent : "#CBD5E1" }}
+      style={{ background: checked ? accent : "var(--switch-off)" }}
     >
       {/* RTL: "off" knob sits on the right, "on" slides left */}
       <span
-        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+        className={`inline-block h-5 w-5 rounded-full bg-[#fff] shadow transition-transform ${
           checked ? "-translate-x-[22px]" : "-translate-x-0.5"
         }`}
       />
@@ -37,7 +37,7 @@ export function Segmented<T extends string>({
   value,
   onChange,
   options,
-  accent = "#0F172A",
+  accent = "var(--accent-ink)",
   ariaLabel,
 }: {
   value: T;
@@ -58,7 +58,7 @@ export function Segmented<T extends string>({
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-              active ? "bg-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+              active ? "bg-white shadow-sm dark:bg-slate-300" : "text-slate-500 hover:text-slate-700"
             }`}
             style={active ? { color: accent } : undefined}
           >

@@ -39,7 +39,7 @@ function Bar({
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <span className={`text-[15px] ${winner ? "font-semibold text-slate-900" : "text-slate-600"}`}>{label}</span>
         <span className="flex items-baseline gap-2">
-          <span className="text-xs tabular-nums" style={{ color: ret >= 0 ? ink : "#B91C1C" }}>
+          <span className="text-xs tabular-nums" style={{ color: ret >= 0 ? ink : "var(--ink-neg)" }}>
             <bdi>
               {ret >= 0 ? "+" : ""}
               {formatPct(ret, 0)}
@@ -72,7 +72,7 @@ function breakEvenText(r: SimResult, be: BreakEven): string {
 export default function VerdictBanner({ result, breakEven }: { result: SimResult; breakEven: BreakEven }) {
   const r = result;
   const max = Math.max(r.realEstate.netWorth, r.sp500.netWorth);
-  const winInk = r.winner === "realEstate" ? "#4338CA" : r.winner === "sp500" ? "#047857" : "#0F172A";
+  const winInk = r.winner === "realEstate" ? "var(--ink-re)" : r.winner === "sp500" ? "var(--ink-sp)" : "var(--accent-ink)";
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7" aria-live="polite">
@@ -97,8 +97,8 @@ export default function VerdictBanner({ result, breakEven }: { result: SimResult
           value={r.realEstate.netWorth}
           ret={r.realEstate.totalReturnPct}
           max={max}
-          color="#4F46E5"
-          ink="#4338CA"
+          color="var(--bar-re)"
+          ink="var(--ink-re)"
           winner={r.winner === "realEstate"}
         />
         <Bar
@@ -106,8 +106,8 @@ export default function VerdictBanner({ result, breakEven }: { result: SimResult
           value={r.sp500.netWorth}
           ret={r.sp500.totalReturnPct}
           max={max}
-          color="#10B981"
-          ink="#047857"
+          color="var(--bar-sp)"
+          ink="var(--ink-sp)"
           winner={r.winner === "sp500"}
         />
       </div>
@@ -119,7 +119,7 @@ export default function VerdictBanner({ result, breakEven }: { result: SimResult
             <li key={i} className="flex gap-2.5 text-[14px] leading-relaxed text-slate-700">
               <span
                 className="mt-[7px] h-2 w-2 shrink-0 rounded-full"
-                style={{ background: reason.favors === "realEstate" ? "#4F46E5" : "#10B981" }}
+                style={{ background: reason.favors === "realEstate" ? "var(--bar-re)" : "var(--bar-sp)" }}
                 aria-label={reason.favors === "realEstate" ? "לטובת הדירה" : "לטובת ה-S&P"}
               />
               <span>{reason.text(formatCompactILS)}</span>

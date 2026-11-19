@@ -153,7 +153,10 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   // 4b. Month-1 cash flow, computed independently
   const living = inp.liveInNew && inp.apartmentType !== "additional";
   check(re.livesInNew === living, "living in only for a sole apartment", ctx);
-  const expNet = expectedNetRent(re.propertyPrice, inp.rentalYield, inp.apartmentType === "additional" ? 0 : inp.ownRentPaid, living);
+  const rentOld = inp.liveInNew && inp.apartmentType === "additional";
+  check(re.rentsOutOld === rentOld, "additional + move in → the old apartment is rented out", ctx);
+  const rentBase = rentOld ? inp.oldHomeValue : re.propertyPrice;
+  const expNet = expectedNetRent(rentBase, inp.rentalYield, inp.apartmentType === "additional" ? 0 : inp.ownRentPaid, living);
   check(near(re.initialMonthlyRentNet, expNet, 0.01), "month-1 net rent (independent)", ctx);
   const expPmt = spitzerPayment(re.loanAmount, inp.mortgageRate, inp.mortgageTerm);
   const expLoanPmt = inp.loanEnabled ? spitzerPayment(inp.loanAmount, inp.loanRate, inp.loanTerm) : 0;

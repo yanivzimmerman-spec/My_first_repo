@@ -139,6 +139,16 @@ ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested,
   ok(!simulate({ ...DEFAULT_INPUTS, apartmentType: "additional", liveInNew: true }).realEstate.livesInNew, "living in is not an option for an additional apartment");
 }
 
+// Keep the old apartment and rent it out, move into the new one (still an additional apartment)
+{
+  const k = simulate({ ...DEFAULT_INPUTS, apartmentType: "additional", liveInNew: true, equity: 1_000_000, propertyPrice: 1_600_000, oldHomeValue: 2_500_000, rentalYield: 3 });
+  ok(k.realEstate.rentsOutOld && !k.realEstate.livesInNew, "keep & rent old: flagged, not the sole-apartment living mode");
+  ok(near(k.realEstate.initialMonthlyRentGross, (2_500_000 * 3) / 1200, 0.01), "rent comes from the old apartment's value");
+  ok(near(k.realEstate.purchaseTax, 1_600_000 * 0.08, 0.01) && k.realEstate.maxLtv === 0.5, "still additional-apartment tax (8%) and 50% LTV");
+  ok(k.realEstate.oldHomeNetProceeds === 0, "the old apartment is not sold");
+  ok(!k.realEstate.shevachExempt, "selling the new apartment while owning the old one is not exempt");
+}
+
 // Loan to invest in the S&P
 const spl = simulate({ ...DEFAULT_INPUTS, spLoanEnabled: true, spLoanAmount: 300_000 });
 ok(near(spl.points[0].sp500, DEFAULT_INPUTS.equity, 0.01), "S&P loan: year 0 net worth = own equity (loan offsets)");

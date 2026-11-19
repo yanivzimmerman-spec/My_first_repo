@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Share2, Check, RotateCcw } from "lucide-react";
+import { Share2, Check, RotateCcw, Moon, Sun, Mail, Copy } from "lucide-react";
+import { useTheme } from "@/lib/theme";
 import { DEFAULT_INPUTS, breakEvenAppreciation, simulate, type SimInputs } from "@/lib/calculator";
 import { PRESETS } from "@/lib/presets";
 import { inputsToQuery, queryToInputs } from "@/lib/url";
@@ -14,6 +15,8 @@ import StoryCard from "./StoryCard";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
+
+const FEEDBACK_EMAIL = "yanivzimmerman@gmail.com";
 
 const sameInputs = (a: SimInputs, b: SimInputs) =>
   (Object.keys(a) as (keyof SimInputs)[]).every((k) => a[k] === b[k]);
@@ -43,6 +46,8 @@ export default function Simulator() {
   const [inputs, setInputs] = useState<SimInputs>(DEFAULT_INPUTS);
   const [hydrated, setHydrated] = useState(false);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [theme, toggleTheme] = useTheme();
 
   // Load a shared scenario from the URL once on mount.
   useEffect(() => {
@@ -86,13 +91,31 @@ export default function Simulator() {
   const activePreset = PRESETS.find((p) => sameInputs(p.inputs, inputs))?.id;
   const isDefault = sameInputs(inputs, DEFAULT_INPUTS);
 
+  const copyEmail = async () => {
+    if (await copyText(FEEDBACK_EMAIL)) {
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 2200);
+    }
+  };
+
   const shareLabel = copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "שיתוף התוצאה";
 
   return (
     <div className="mx-auto max-w-[1180px] pr-[max(16px,env(safe-area-inset-right,0px))] pl-[max(16px,env(safe-area-inset-left,0px))] pb-16 sm:px-6 lg:px-8">
       {/* ---------- Header ---------- */}
       <header className="pt-8 pb-6 sm:pt-12 sm:pb-8">
-        <p className="text-[13px] font-semibold text-slate-500">נדל״ן מול סנופי</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[13px] font-semibold text-slate-500">נדל״ן מול סנופי</p>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "מעבר למצב בהיר" : "מעבר למצב כהה"}
+            title={theme === "dark" ? "מצב בהיר" : "מצב כהה"}
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
+          >
+            {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+        </div>
         <h1 className="mt-1 max-w-[22ch] text-[28px] font-bold leading-tight text-slate-900 [text-wrap:balance] sm:text-4xl">
           מה משתלם יותר: <span className="whitespace-nowrap text-re">דירה להשקעה</span> או <span className="whitespace-nowrap text-sp-ink">S&P 500</span>?
         </h1>
@@ -170,7 +193,7 @@ export default function Simulator() {
         </div>
 
         <div className="min-w-0 lg:col-start-2">
-          <GrowthChart result={result} />
+          <GrowthChart result={result} dark={theme === "dark"} />
         </div>
 
         <div className="min-w-0 space-y-5 lg:col-start-2">
@@ -195,6 +218,35 @@ export default function Simulator() {
           </p>
         </div>
       </div>
+
+      {/* ---------- Feedback ---------- */}
+      <footer className="mt-10 flex flex-col items-start gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[15px] font-semibold text-slate-800">יש לכם הערה או רעיון לשיפור?</p>
+          <p className="mt-0.5 text-[13px] text-slate-500">
+            או כתבו לכתובת{" "}
+            <span dir="ltr" className="select-all font-medium text-slate-700">
+              {FEEDBACK_EMAIL}
+            </span>
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent("משוב על נדל״ן מול סנופי")}`}
+            className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-500"
+          >
+            <Mail size={16} /> שליחת משוב
+          </a>
+          <button
+            type="button"
+            onClick={copyEmail}
+            className="flex items-center gap-2 rounded-full px-3 py-2 text-sm text-slate-500 transition hover:text-slate-900"
+          >
+            {emailCopied ? <Check size={15} /> : <Copy size={15} />}
+            {emailCopied ? "הכתובת הועתקה" : "העתקת הכתובת"}
+          </button>
+        </div>
+      </footer>
     </div>
   );
 }

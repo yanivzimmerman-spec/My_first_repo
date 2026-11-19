@@ -11,6 +11,11 @@ npm test         # calculator unit + fuzz tests
 npm run build
 ```
 
+## Interface
+
+- Light and dark mode: follows the device setting on first visit; the sun/moon button switches and the choice is remembered (localStorage). An inline script sets the theme before the first paint.
+- Feedback: a footer button opens an email to the site owner; the address is also shown and can be copied (mail links don't always work inside embedded pages).
+
 ## Structure
 
 | Path | Purpose |
@@ -36,6 +41,7 @@ The full source review is in a local research report; each rule below was checke
 - **Down-payment loan (optional)**: a personal / "any purpose" loan (default 7.5%, 10 years) added to the cash for the purchase. Its payments count as out-of-pocket, so with matching on the S&P track invests the same amount. The remaining balance is subtracted at sale. Banks check where the equity comes from, and since February 2026 all housing credit counts toward the 50% payment-to-income limit.
 - **Rent**: the yield is gross on the purchase price; rent grows by its own rate (default 3%/yr). One vacant month a year, 8% maintenance and ₪150/month insurance are deducted.
 - **Live in or rent out** (sole apartment and upgrader): when the buyer lives in the new apartment, the rent they would otherwise pay counts as saved, in full (no vacancy, no rent tax; maintenance and insurance still apply). In the S&P track they live in a rental, and the difference is invested so both tracks spend the same each month.
+- **Keep the old apartment and rent it out** (additional apartment): the owner moves into the new apartment and rents out the old one. Tax-wise it is still an additional apartment (8% purchase tax, 50% financing, מס שבח on the new one). Rent is based on the old apartment's value; in the S&P track the owner keeps living in the old apartment, so the old home itself is the same in both tracks.
 - **Rent tax**: exempt up to ₪5,654/month (frozen through 2027, CPI-linked after). Between the ceiling and twice the ceiling, the tapered exemption applies and the rest is taxed at 10% (or the 10% track on gross rent, whichever is cheaper). Above twice the ceiling, 10% applies. A sole-apartment owner who lives in a rental may deduct the rent they pay, up to ₪90K a year, on the 10% track (s.122(f)).
 - **S&P 500**: (1 + return) × (1 − fee) − 1, minus dividend withholding drag (0.32%/yr Israeli tracking fund at 25% US withholding, 0.19%/yr Irish ETF at 15%). At sale, 25% on the gain: CPI-indexed basis for a CPI-based Israeli fund (some Israeli funds are dollar-based; check the prospectus), USD-indexed for an Irish ETF under section 88 (assumed flat USD/ILS, so the nominal gain is taxed). Inflation default 2.0% (Bank of Israel forecast for 2027, long-run CPI about 1.9%).
 - **Surtax (מס יסף)**: 5% (3% + 2% on capital income) on capital gains above ₪721,560 in the sale year, assuming no other income that year. Apartment sales count only if non-exempt and above ₪5,382,285.

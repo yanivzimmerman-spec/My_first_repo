@@ -119,7 +119,9 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
 
   for (let m = 1; m <= N; m++) {
     const y = Math.floor((m - 1) / 12);
-    const gross = ((price * x.rentalYield) / 1200) * Math.pow(1 + x.rentGrowth / 100, y);
+    // Additional apartment + moving in: the old apartment is the one rented out
+    const rentedValue = additional && x.liveInNew ? x.oldHomeValue : price;
+    const gross = ((rentedValue * x.rentalYield) / 1200) * Math.pow(1 + x.rentGrowth / 100, y);
     const received = living ? gross : (gross * 11) / 12;
     let rentTax = 0;
     const ceiling = 5_654 * Math.pow(1 + x.inflation / 100, y); // frozen in year 1 (2027), indexed after

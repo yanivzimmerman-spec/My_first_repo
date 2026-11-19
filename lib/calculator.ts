@@ -240,6 +240,8 @@ export interface RealEstateSummary {
   apartmentType: ApartmentType;
   /** The buyer lives in the new apartment (rent saved instead of rent received) */
   livesInNew: boolean;
+  /** Additional apartment: moves into the new one and rents out the old one */
+  rentsOutOld: boolean;
   /** Own money at the start (cash + net proceeds from the old home) */
   startCapital: number;
   oldHomeNetProceeds: number;
@@ -493,9 +495,27 @@ export function oldHomeUsableAtPurchase(inputs: SimInputs): number {
   return Math.min(net, bridge);
 }
 
-/** Living in the new apartment is an option only when it's the buyer's sole apartment. */
+/**
+ * Sole apartment / upgrader living in the new apartment: the rent they'd pay is saved
+ * (no vacancy, no rent tax). In the S&P track they live in a rental.
+ */
 export function livesInNew(inputs: SimInputs): boolean {
   return inputs.liveInNew && inputs.apartmentType !== "additional";
+}
+
+/**
+ * Additional apartment, "keep the old one and rent it out": the owner moves into the
+ * new apartment and rents out the old one (value = oldHomeValue). Tax-wise still an
+ * additional apartment. In the S&P track they keep living in the old apartment, so the
+ * old home itself is the same in both tracks; only its rent differs.
+ */
+export function rentsOutOld(inputs: SimInputs): boolean {
+  return inputs.liveInNew && inputs.apartmentType === "additional";
+}
+
+/** Value the rent is based on: the old apartment when it's the one rented out. */
+export function rentBaseValue(inputs: SimInputs, price: number): number {
+  return rentsOutOld(inputs) ? inputs.oldHomeValue : price;
 }
 
 /** Cash available for the purchase: own money (usable on the day) plus the optional down-payment loan. */
@@ -711,7 +731,8 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     }
 
     // 3. Rent: grows yearly; one vacant month a year; tax; landlord costs
-    const rentGross = Math.max(0, ((price * rentalYield) / 100 / 12) * Math.pow(1 + rentGrowth / 100, yearIdx));
+    const rentBase = rentBaseValue(inputs, price);
+    const rentGross = Math.max(0, ((rentBase * rentalYield) / 100 / 12) * Math.pow(1 + rentGrowth / 100, yearIdx));
     // Living in it: the saved rent counts in full, with no vacancy and no rent tax
     const living = livesInNew(inputs);
     const collected = living ? rentGross : rentGross * (1 - VACANCY_MONTHS_PER_YEAR / 12);
@@ -779,6 +800,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const realEstate: RealEstateSummary = {
     apartmentType,
     livesInNew: livesInNew(inputs),
+    rentsOutOld: rentsOutOld(inputs),
     startCapital: equity,
     oldHomeNetProceeds: old.net,
     oldHomeUsableAtPurchase: oldHomeUsableAtPurchase(inputs),
@@ -806,7 +828,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     initialMonthlyGap: initialGap,
     initialMonthlyOwn: initialOwn,
     initialSideDeposit,
-    netYieldPct: price > 0 ? ((initialRentNet * 12) / price) * 100 : 0,
+    netYieldPct: rentBaseValue(inputs, price) > 0 ? ((initialRentNet * 12) / rentBaseValue(inputs, price)) * 100 : 0,
     totalCashInvested: reCash,
     outOfPocketContributions: outOfPocket,
     totalInterestPaid: interestPaid,

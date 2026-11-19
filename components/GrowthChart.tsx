@@ -15,8 +15,15 @@ import { BarChart3, Table2, Repeat } from "lucide-react";
 import type { SimResult, YearPoint } from "@/lib/calculator";
 import { formatCompactILS, formatILS } from "@/lib/format";
 
-const RE = "#4F46E5";
-const SP = "#10B981";
+// HTML parts (legend, tooltip) follow the CSS theme variables.
+const RE = "var(--bar-re)";
+const SP = "var(--bar-sp)";
+
+// SVG parts get explicit colors per theme (the dark pair is validated for the dark surface).
+const PALETTE = {
+  light: { re: "#4F46E5", sp: "#10B981", grid: "#EEF2F6", axis: "#E2E8F0", tick: "#64748B", cursor: "#94A3B8", cross: "#F59E0B", crossText: "#B45309", dot: "#FFFFFF" },
+  dark: { re: "#7C78FF", sp: "#10A97C", grid: "#1E293B", axis: "#334155", tick: "#94A3B8", cursor: "#64748B", cross: "#F59E0B", crossText: "#FBBF24", dot: "#111A2B" },
+};
 
 interface TipProps {
   active?: boolean;
@@ -70,7 +77,8 @@ function Row({ color, label, value }: { color: string; label: string; value: num
   );
 }
 
-export default function GrowthChart({ result }: { result: SimResult }) {
+export default function GrowthChart({ result, dark = false }: { result: SimResult; dark?: boolean }) {
+  const pal = dark ? PALETTE.dark : PALETTE.light;
   const [view, setView] = useState<"chart" | "table">("chart");
   const { points, crossovers } = result;
   const crossYears = new Set(crossovers.map((c) => c.year));
@@ -132,22 +140,22 @@ export default function GrowthChart({ result }: { result: SimResult }) {
             <AreaChart data={points} margin={{ top: 16, right: 4, left: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="gRE" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={RE} stopOpacity={0.08} />
-                  <stop offset="100%" stopColor={RE} stopOpacity={0} />
+                  <stop offset="0%" stopColor={pal.re} stopOpacity={0.08} />
+                  <stop offset="100%" stopColor={pal.re} stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gSP" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={SP} stopOpacity={0.08} />
-                  <stop offset="100%" stopColor={SP} stopOpacity={0} />
+                  <stop offset="0%" stopColor={pal.sp} stopOpacity={0.08} />
+                  <stop offset="100%" stopColor={pal.sp} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} stroke="#EEF2F6" />
+              <CartesianGrid vertical={false} stroke={pal.grid} />
               {/* RTL: time flows right → left, value axis on the right */}
               <XAxis
                 dataKey="year"
                 reversed
                 tickLine={false}
-                axisLine={{ stroke: "#E2E8F0" }}
-                tick={{ fill: "#64748B", fontSize: 12 }}
+                axisLine={{ stroke: pal.axis }}
+                tick={{ fill: pal.tick, fontSize: 12 }}
                 interval={tickInterval}
                 tickFormatter={(y: number) => (y === 0 ? "היום" : String(y))}
               />
@@ -156,11 +164,11 @@ export default function GrowthChart({ result }: { result: SimResult }) {
                 width={62}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: "#64748B", fontSize: 12 }}
+                tick={{ fill: pal.tick, fontSize: 12 }}
                 tickFormatter={(v: number) => formatCompactILS(v)}
               />
               <Tooltip
-                cursor={{ stroke: "#94A3B8", strokeWidth: 1, strokeDasharray: "4 4" }}
+                cursor={{ stroke: pal.cursor, strokeWidth: 1, strokeDasharray: "4 4" }}
                 content={(props) => (
                   <ChartTooltip
                     active={props.active}
@@ -173,30 +181,30 @@ export default function GrowthChart({ result }: { result: SimResult }) {
                 <ReferenceLine
                   key={c.year}
                   x={c.year}
-                  stroke="#F59E0B"
+                  stroke={pal.cross}
                   strokeDasharray="4 4"
-                  label={{ value: "נקודת המהפך", position: "top", fill: "#B45309", fontSize: 11, fontWeight: 600 }}
+                  label={{ value: "נקודת המהפך", position: "top", fill: pal.crossText, fontSize: 11, fontWeight: 600 }}
                 />
               ))}
               <Area
                 type="monotone"
                 dataKey="sp500"
                 name="S&P 500"
-                stroke={SP}
+                stroke={pal.sp}
                 strokeWidth={2}
                 fill="url(#gSP)"
                 isAnimationActive={false}
-                activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }}
+                activeDot={{ r: 5, stroke: pal.dot, strokeWidth: 2 }}
               />
               <Area
                 type="monotone"
                 dataKey="realEstate"
                 name="דירה להשקעה"
-                stroke={RE}
+                stroke={pal.re}
                 strokeWidth={2}
                 fill="url(#gRE)"
                 isAnimationActive={false}
-                activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }}
+                activeDot={{ r: 5, stroke: pal.dot, strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>

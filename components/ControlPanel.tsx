@@ -7,9 +7,9 @@ import { formatCompactILS, formatILS, formatPct } from "@/lib/format";
 import SliderInput from "./SliderInput";
 import { Segmented, Switch } from "./Toggle";
 
-const RE = "#4F46E5";
-const SP = "#059669";
-const LOAN = "#B45309";
+const RE = "var(--accent-re)";
+const SP = "var(--accent-sp)";
+const LOAN = "var(--accent-loan)";
 
 interface Props {
   inputs: SimInputs;
@@ -61,7 +61,10 @@ function AddOn({
   return (
     <div
       className="rounded-xl border p-4 transition-colors"
-      style={{ borderColor: checked ? `${accent}55` : "#E2E8F0", background: checked ? `${accent}08` : "#FFFFFF" }}
+      style={{
+        borderColor: checked ? `color-mix(in srgb, ${accent} 33%, transparent)` : "var(--color-slate-200)",
+        background: checked ? `color-mix(in srgb, ${accent} 4%, transparent)` : "var(--color-white)",
+      }}
     >
       <label className="flex cursor-pointer items-start justify-between gap-3">
         <span>
@@ -84,11 +87,13 @@ export default function ControlPanel({ inputs, result, set }: Props) {
   const type = inputs.apartmentType;
   const price = re.propertyPrice;
 
-  // Rent is asked in ₪ per month; the engine keeps it as a yield on the price.
-  const rent = (price * inputs.rentalYield) / 1200;
+  // Rent is asked in ₪ per month; the engine keeps it as a yield on the rented apartment's value
+  // (the old apartment when it's the one rented out).
+  const rentBase = re.rentsOutOld ? inputs.oldHomeValue : price;
+  const rent = (rentBase * inputs.rentalYield) / 1200;
   const rentBound = {
-    min: Math.ceil((price * BOUNDS.rentalYield.min) / 1200 / 50) * 50,
-    max: Math.floor((price * BOUNDS.rentalYield.max) / 1200 / 50) * 50,
+    min: Math.ceil((rentBase * BOUNDS.rentalYield.min) / 1200 / 50) * 50,
+    max: Math.floor((rentBase * BOUNDS.rentalYield.max) / 1200 / 50) * 50,
     step: 50,
   };
   const futureValue = price * Math.pow(1 + inputs.appreciation / 100, inputs.years);
@@ -132,6 +137,26 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             ]}
           />
           <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{TYPE_TEXT[type]}</p>
+          {type === "additional" && (
+            <div className="mt-4">
+              <p className="mb-2 text-[15px] text-slate-700">איפה תגורו?</p>
+              <Segmented
+                ariaLabel="איזו דירה משכירים"
+                accent={RE}
+                value={inputs.liveInNew ? "moveIn" : "stay"}
+                onChange={(v) => set("liveInNew", v === "moveIn")}
+                options={[
+                  { value: "stay", label: "בישנה, משכירים את החדשה" },
+                  { value: "moveIn", label: "בחדשה, משכירים את הישנה" },
+                ]}
+              />
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+                {inputs.liveInNew
+                  ? "עוברים לדירה החדשה ומשכירים את הישנה. שכר הדירה מגיע מהדירה הישנה. במסלול ה-S&P ממשיכים לגור בדירה הישנה."
+                  : "ממשיכים לגור בדירה הקיימת ומשכירים את החדשה."}
+              </p>
+            </div>
+          )}
           {type !== "additional" && (
             <div className="mt-4">
               <p className="mb-2 text-[15px] text-slate-700">מה תעשו בדירה החדשה?</p>
@@ -153,6 +178,20 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             </div>
           )}
         </div>
+
+        {re.rentsOutOld && (
+          <div className="rounded-xl border border-slate-200 p-4">
+            <SliderInput
+              label="כמה שווה הדירה הישנה?"
+              kind="currency"
+              value={inputs.oldHomeValue}
+              bound={BOUNDS.oldHomeValue}
+              accent={RE}
+              onChange={(v) => set("oldHomeValue", v)}
+              hint="לפי השווי הזה מחושב שכר הדירה שתקבלו עליה"
+            />
+          </div>
+        )}
 
         {type === "upgrader" && (
           <div className="space-y-6 rounded-xl border border-slate-200 p-4">
@@ -247,12 +286,12 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         </div>
 
         <SliderInput
-          label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : "שכר דירה חודשי"}
+          label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : re.rentsOutOld ? "שכר דירה על הדירה הישנה" : "שכר דירה חודשי"}
           kind="currency"
           value={Math.round(rent / 10) * 10}
           bound={rentBound}
           accent={RE}
-          onChange={(v) => set("rentalYield", Math.min(BOUNDS.rentalYield.max, Math.max(BOUNDS.rentalYield.min, (v * 1200) / price)))}
+          onChange={(v) => set("rentalYield", Math.min(BOUNDS.rentalYield.max, Math.max(BOUNDS.rentalYield.min, (v * 1200) / rentBase)))}
           hint={
             <>
               {re.livesInNew ? (
@@ -400,7 +439,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         </AddOn>
         <AddOn
           title="לבדוק אם הבנק יאשר"
-          accent="#0F172A"
+          accent="var(--accent-ink)"
           checked={inputs.incomeCheck}
           onChange={(v) => set("incomeCheck", v)}
           description="בנק ישראל אוסר משכנתא שההחזר עליה גבוה מ-50% מההכנסה הפנויה."

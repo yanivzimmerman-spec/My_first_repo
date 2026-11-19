@@ -88,7 +88,7 @@ export default function Breakdown({ result }: { result: SimResult }) {
           : []),
         re.livesInNew
           ? { label: "שכר דירה שנחסך", re: re.totalRentGross, sp: null, note: "גרים בדירה; במסלול ה-S&P משלמים שכירות" }
-          : { label: "שכר דירה (ברוטו)", re: re.totalRentGross, sp: null },
+          : { label: re.rentsOutOld ? "שכר דירה מהדירה הישנה (ברוטו)" : "שכר דירה (ברוטו)", re: re.totalRentGross, sp: null },
         ...(re.livesInNew
           ? []
           : [{ label: "חודשים פנויים", re: re.totalVacancyLoss, sp: null, negative: true, note: "חודש אחד בשנה" } as Line]),
