@@ -31,6 +31,7 @@ export default function SituationPicker({
   set,
   onReset,
   guideHref,
+  onPick,
 }: {
   inputs: SimInputs;
   set: <K extends keyof SimInputs>(key: K, value: SimInputs[K]) => void;
@@ -38,6 +39,8 @@ export default function SituationPicker({
   onReset?: () => void;
   /** Extra card that opens the guided path */
   guideHref?: string;
+  /** After a card is chosen (the step-by-step version moves on) */
+  onPick?: () => void;
 }) {
   const current = matchSituation(inputs);
   return (
@@ -65,6 +68,7 @@ export default function SituationPicker({
                 track({ type: "card", id: s.id });
                 const next = situationInputs(s);
                 (Object.keys(next) as (keyof SimInputs)[]).forEach((k) => set(k, next[k] as SimInputs[typeof k]));
+                onPick?.();
               }}
               className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-right transition sm:gap-3 sm:p-3 ${
                 active ? "border-slate-900 bg-white shadow-sm ring-1 ring-slate-900" : "border-slate-200 bg-white hover:border-slate-400"
@@ -111,7 +115,7 @@ export default function SituationPicker({
         <a href={SOURCES.boiLoans.url} target="_blank" rel="noopener noreferrer" className={link}>
           בנק ישראל
         </a>
-        . אפשר לשנות כל פרט בפאנל.
+        . אפשר לשנות כל פרט בהמשך.
       </p>
     </div>
   );

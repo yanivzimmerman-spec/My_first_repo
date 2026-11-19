@@ -90,6 +90,7 @@ export default function VerdictBanner({
   breakEvenRent,
   comboLink = true,
   guideLink = false,
+  details = true,
 }: {
   result: SimResult;
   breakEven: BreakEven;
@@ -98,6 +99,8 @@ export default function VerdictBanner({
   comboLink?: boolean;
   /** Show the link to the guided path */
   guideLink?: boolean;
+  /** Reasons, break-even and links under the bars (the step-by-step version shows them in a menu) */
+  details?: boolean;
 }) {
   const r = result;
   // Amounts are in shekels of that year; divide by inflation for today's money
@@ -148,9 +151,35 @@ export default function VerdictBanner({
         />
       </div>
 
-      <div className="mt-6 border-t border-slate-100 pt-5">
-        <h3 className="text-[13px] font-semibold text-slate-500">למה זה יצא ככה?</h3>
-        <ul className="mt-3 space-y-2.5">
+      {details && (
+        <VerdictDetails result={r} breakEven={breakEven} breakEvenRent={breakEvenRent} comboLink={comboLink} guideLink={guideLink} />
+      )}
+    </section>
+  );
+}
+
+/** Why it came out this way, the break-even sentence, and the links onward. */
+export function VerdictDetails({
+  result,
+  breakEven,
+  breakEvenRent,
+  comboLink = true,
+  guideLink = false,
+  framed = true,
+}: {
+  result: SimResult;
+  breakEven: BreakEven;
+  breakEvenRent: BreakEven;
+  comboLink?: boolean;
+  guideLink?: boolean;
+  /** Divider above (inside the answer card) */
+  framed?: boolean;
+}) {
+  const r = result;
+  return (
+    <div className={framed ? "mt-6 border-t border-slate-100 pt-5" : ""}>
+        {framed && <h3 className="text-[13px] font-semibold text-slate-500">למה זה יצא ככה?</h3>}
+        <ul className={`${framed ? "mt-3 " : ""}space-y-2.5`}>
           {topReasons(r).map((reason, i) => (
             <li key={i} className="flex gap-2.5 text-[14px] leading-relaxed text-slate-700">
               <span
@@ -183,6 +212,5 @@ export default function VerdictBanner({
           </a>
         )}
       </div>
-    </section>
   );
 }
