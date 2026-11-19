@@ -37,7 +37,7 @@ function Card({ q, a, children }: { q: string; a: string; children: React.ReactN
 type State = { kind: "loading" } | { kind: "denied" } | { kind: "unavailable" } | { kind: "ok"; report: Report };
 
 /** What testers do with the alpha. Readable by the owner and editors only (db rules). */
-export default function StatsView() {
+export default function StatsView({ onBack }: { onBack?: () => void } = {}) {
   const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
@@ -66,7 +66,16 @@ export default function StatsView() {
 
   return (
     <div className="space-y-5">
-      <a href="#" className="inline-flex items-center gap-1 text-[14px] font-semibold text-slate-600 hover:text-slate-900">
+      <a
+        href="#"
+        onClick={(e) => {
+          if (onBack) {
+            e.preventDefault();
+            onBack();
+          }
+        }}
+        className="inline-flex items-center gap-1 text-[14px] font-semibold text-slate-600 hover:text-slate-900"
+      >
         → חזרה לאתר
       </a>
       <header>

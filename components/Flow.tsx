@@ -97,6 +97,7 @@ export default function Flow() {
   useEffect(() => {
     const read = () => {
       const next = VIEW_OF[window.location.hash] ?? "pick";
+      setTrail((t) => t.slice(0, -1));
       setView((prev) => {
         if (prev !== next) window.scrollTo({ top: 0 });
         return next;
@@ -106,8 +107,26 @@ export default function Flow() {
     window.addEventListener("hashchange", read);
     return () => window.removeEventListener("hashchange", read);
   }, []);
-  const go = (v: View) => {
-    window.location.hash = v === "pick" ? "" : v;
+  // Navigation works from state alone (the claude.ai viewer may ignore address changes);
+  // the address follows when it can, so the browser's back button also works where allowed
+  const [trail, setTrail] = useState<View[]>([]);
+  const [furthest, setFurthest] = useState(0);
+  const go = (v: View, record = true) => {
+    if (v === view) return;
+    if (record) setTrail((t) => [...t, view]);
+    setView(v);
+    window.scrollTo({ top: 0 });
+    try {
+      const hash = v === "pick" ? "" : `#${v}`;
+      if (window.location.hash !== hash) window.history.pushState(null, "", hash || window.location.pathname + window.location.search);
+    } catch {
+      /* address not writable here: state navigation still works */
+    }
+  };
+  const back = () => {
+    const prev = trail[trail.length - 1] ?? (view === "result" ? "basics" : "pick");
+    setTrail((t) => t.slice(0, -1));
+    go(prev, false);
   };
 
   useEffect(() => {
@@ -166,6 +185,18 @@ export default function Flow() {
   };
 
   const stageIndex = view === "pick" ? 0 : view === "basics" ? 1 : 2;
+  useEffect(() => {
+    if (view === "pick" || view === "basics" || view === "result") setFurthest((f) => Math.max(f, stageIndex));
+  }, [view, stageIndex]);
+  const backButton = (label: string) => (
+    <button
+      type="button"
+      onClick={back}
+      className="mb-3 inline-flex items-center gap-1 text-[14px] font-semibold text-slate-600 hover:text-slate-900"
+    >
+      → {label}
+    </button>
+  );
 
   return (
     <>
@@ -178,6 +209,7 @@ export default function Flow() {
               go("result");
             }}
             freshProfile={() => profileFromInputs(inputs)}
+            onExit={back}
           />
         </div>
       )}
@@ -185,7 +217,14 @@ export default function Flow() {
         <div className="mx-auto max-w-[780px] pr-[max(16px,env(safe-area-inset-right,0px))] pl-[max(16px,env(safe-area-inset-left,0px))] pb-16 sm:px-6">
           <header className="pt-8 pb-5 sm:pt-12">
             <div className="flex items-center justify-between gap-3">
-              <a href="#" className="flex items-center gap-2 text-[13px] font-semibold text-slate-500 hover:text-slate-900">
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  go("pick");
+                }}
+                className="flex items-center gap-2 text-[13px] font-semibold text-slate-500 hover:text-slate-900"
+              >
                 נדל״ן מול סנופי
                 <span className="rounded-full border border-slate-300 px-2 py-px text-[11px] font-semibold text-slate-600">טסט</span>
               </a>
@@ -202,7 +241,7 @@ export default function Flow() {
               <nav aria-label="שלבים" className="mt-5">
                 <ol className="grid grid-cols-3 gap-1.5">
                   {STAGES.map((name, i) => {
-                    const reachable = i <= stageIndex || (i === 1 && !!situation) || i === 2;
+                    const reachable = i <= furthest;
                     return (
                       <li key={name}>
                         <button
@@ -226,7 +265,7 @@ export default function Flow() {
           </header>
 
           <main>
-            {view === "stats" && <StatsView />}
+            {view === "stats" && <StatsView onBack={back} />}
 
             {/* ---------- 1. Situation ---------- */}
             {view === "pick" && (
@@ -239,6 +278,7 @@ export default function Flow() {
                   inputs={result.inputs}
                   set={set}
                   guideHref="#plan"
+                  onGuide={() => go("plan")}
                   onPick={() => go("basics")}
                 />
               </section>
@@ -246,6 +286,8 @@ export default function Flow() {
 
             {/* ---------- 2. A few numbers ---------- */}
             {view === "basics" && (
+              <>
+              {backButton("חזרה לבחירת המצב")}
               <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
                 <p className="text-[13px] font-semibold text-slate-500">{situation?.title ?? "המצב שלכם"}</p>
                 <h1 className="mt-1 text-2xl font-bold text-slate-900">כמה נתונים, וזהו</h1>
@@ -289,11 +331,13 @@ export default function Flow() {
                   הצג תוצאה ←
                 </button>
               </section>
+              </>
             )}
 
             {/* ---------- 3. The answer, details folded ---------- */}
             {view === "result" && scenarios && (
               <div className="space-y-3">
+                {backButton("חזרה לנתונים")}
                 <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenR} details={false} />
                 <Fold title="למה זה יצא ככה?" hint="מה הכריע, ומה צריך לקרות כדי שזה יתהפך">
                   <div className="px-2">
@@ -330,7 +374,11 @@ export default function Flow() {
                   </p>
                   <a
                     href="#plan"
-                    onClick={() => track({ type: "guideLink" })}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      track({ type: "guideLink" });
+                      go("plan");
+                    }}
                     className="mt-4 inline-flex rounded-full bg-white px-5 py-2.5 text-[14.5px] font-semibold text-slate-900 transition hover:bg-slate-100"
                   >
                     למסלול המודרך ←
@@ -347,7 +395,10 @@ export default function Flow() {
                     {copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "שיתוף התוצאה"}
                   </button>
                   <button type="button" onClick={() => go("pick")} className="px-3 py-2 text-[14px] text-slate-600 hover:text-slate-900">
-                    מצב אחר
+                    בחירת מצב אחר
+                  </button>
+                  <button type="button" onClick={() => go("basics")} className="px-3 py-2 text-[14px] text-slate-600 hover:text-slate-900">
+                    שינוי הנתונים
                   </button>
                 </div>
               </div>
@@ -364,7 +415,13 @@ export default function Flow() {
                 <Mail size={13} /> שליחת משוב
               </a>
               {canSeeStats && (
-                <a href="#stats" className="underline decoration-slate-300 underline-offset-2 hover:text-slate-900">
+                <a
+                  href="#stats"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    go("stats");
+                  }}
+                  className="underline decoration-slate-300 underline-offset-2 hover:text-slate-900">
                   נתוני שימוש (לנו)
                 </a>
               )}

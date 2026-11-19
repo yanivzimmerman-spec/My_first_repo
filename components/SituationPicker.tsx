@@ -32,6 +32,7 @@ export default function SituationPicker({
   onReset,
   guideHref,
   onPick,
+  onGuide,
 }: {
   inputs: SimInputs;
   set: <K extends keyof SimInputs>(key: K, value: SimInputs[K]) => void;
@@ -41,6 +42,8 @@ export default function SituationPicker({
   guideHref?: string;
   /** After a card is chosen (the step-by-step version moves on) */
   onPick?: () => void;
+  /** Open the guided path in place (instead of following the link) */
+  onGuide?: () => void;
 }) {
   const current = matchSituation(inputs);
   return (
@@ -91,7 +94,13 @@ export default function SituationPicker({
         {guideHref && (
           <a
             href={guideHref}
-            onClick={() => track({ type: "guideCard" })}
+            onClick={(e) => {
+              track({ type: "guideCard" });
+              if (onGuide) {
+                e.preventDefault();
+                onGuide();
+              }
+            }}
             className="col-span-2 flex items-center gap-2.5 rounded-xl border border-dashed border-slate-300 p-2.5 text-right transition hover:border-slate-500 sm:gap-3 sm:p-3 lg:col-span-3"
           >
             <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600 sm:grid">

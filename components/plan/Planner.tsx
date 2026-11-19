@@ -168,6 +168,7 @@ export default function Planner({
   freshProfile,
   initialState,
   onStateChange,
+  onExit,
 }: {
   /** Starting values (from the simulator when opened from it) */
   initialProfile?: Profile;
@@ -179,6 +180,8 @@ export default function Planner({
   initialState?: PlanState;
   /** Called on every change, to keep the plan in the link */
   onStateChange?: (state: PlanState) => void;
+  /** Leave the guided path (back to the simulator) without relying on the address */
+  onExit?: () => void;
 } = {}) {
   const [theme, toggleTheme] = useTheme();
   const [step, setStep] = useState(initialState?.step ?? 0);
@@ -230,7 +233,16 @@ export default function Planner({
       <header className="pt-8 pb-5 sm:pt-12 sm:pb-7">
         <div className="flex items-center justify-between gap-3">
           {onOpenSimulator ? (
-            <a href="#" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900">
+            <a
+              href="#"
+              onClick={(e) => {
+                if (onExit) {
+                  e.preventDefault();
+                  onExit();
+                }
+              }}
+              className="text-[13px] font-semibold text-slate-500 hover:text-slate-900"
+            >
               → נדל״ן מול סנופי
             </a>
           ) : (
@@ -391,6 +403,14 @@ export default function Planner({
             className="rounded-full border border-slate-300 bg-white px-5 py-2.5 text-[14.5px] font-semibold text-slate-700 transition hover:border-slate-500"
           >
             → הקודם
+          </button>
+        ) : onExit ? (
+          <button
+            type="button"
+            onClick={onExit}
+            className="rounded-full border border-slate-300 bg-white px-5 py-2.5 text-[14.5px] font-semibold text-slate-700 transition hover:border-slate-500"
+          >
+            → חזרה
           </button>
         ) : (
           <span />
