@@ -4,7 +4,7 @@ import { useId, useState, type ReactNode } from "react";
 import type { Bound } from "@/lib/calculator";
 import { formatNumber, parseLooseNumber } from "@/lib/format";
 
-type Kind = "currency" | "percent" | "years";
+type Kind = "currency" | "percent" | "years" | "months";
 
 interface Props {
   label: string;
@@ -49,8 +49,8 @@ export default function SliderInput({
   };
 
   const prefix = kind === "currency" ? "₪" : "";
-  const suffix = kind === "percent" ? "%" : kind === "years" ? " שנים" : "";
-  const width = kind === "currency" ? "w-[78px]" : kind === "years" ? "w-[24px]" : "w-[40px]";
+  const suffix = kind === "percent" ? "%" : kind === "years" ? " שנים" : kind === "months" ? " חודשים" : "";
+  const width = kind === "currency" ? "w-[78px]" : kind === "years" || kind === "months" ? "w-[24px]" : "w-[40px]";
 
   return (
     <div className={disabled ? "opacity-50" : ""}>

@@ -87,10 +87,13 @@ export default function VerdictBanner({
   result,
   breakEven,
   breakEvenRent,
+  comboLink = true,
 }: {
   result: SimResult;
   breakEven: BreakEven;
   breakEvenRent: BreakEven;
+  /** Show the "mix both" link (the planner draft has no combo page) */
+  comboLink?: boolean;
 }) {
   const r = result;
   // Amounts are in shekels of that year; divide by inflation for today's money
@@ -158,12 +161,14 @@ export default function VerdictBanner({
         <p className="mt-4 rounded-lg bg-slate-50 px-3.5 py-2.5 text-[14px] font-medium leading-relaxed text-slate-800">
           {breakEvenText(r, breakEven)} {breakEvenRentText(r, breakEvenRent)}
         </p>
+        {comboLink && (
         <a
           href="#combo"
           className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
         >
           רוצים לשלב? חלק בדירה וחלק במדד ←
         </a>
+        )}
       </div>
     </section>
   );
