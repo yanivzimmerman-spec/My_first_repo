@@ -2,7 +2,9 @@
 
 import { Home, KeyRound, Repeat, Plus, ArrowLeftRight, Building2 } from "lucide-react";
 import type { SimInputs } from "@/lib/calculator";
-import { SITUATIONS, matchSituation, type Situation } from "@/lib/presets";
+import { SITUATIONS, matchSituation, situationInputs, type Situation } from "@/lib/presets";
+import { formatCompactILS as c } from "@/lib/format";
+import Sources from "./Sources";
 
 const ICONS: Record<Situation["icon"], typeof Home> = {
   home: Home,
@@ -12,6 +14,16 @@ const ICONS: Record<Situation["icon"], typeof Home> = {
   move: ArrowLeftRight,
   two: Building2,
 };
+
+/** Statistics as published, two decimals: ₪1.13M. */
+const m = (v: number) => `\u2066₪${(v / 1_000_000).toFixed(2)}M\u2069`;
+
+/** One short line with the example's numbers. */
+function exampleLine(s: Situation): string {
+  const e = s.example;
+  if (s.id === "upgrade" && e.oldHomeValue) return `מוכרים ב-${c(e.oldHomeValue)} · קונים ב-${c(e.propertyPrice)}`;
+  return `${c(e.equity)} הון · דירה ב-${c(e.propertyPrice)}`;
+}
 
 /** Draft: "מה המצב שלכם?" — cards for the main situations, replacing the example chips. */
 export default function SituationPicker({
@@ -36,9 +48,8 @@ export default function SituationPicker({
               role="radio"
               aria-checked={active}
               onClick={() => {
-                set("apartmentType", s.values.apartmentType);
-                set("liveInNew", s.values.liveInNew);
-                set("liveElsewhere", s.values.liveElsewhere);
+                const next = situationInputs(s);
+                (Object.keys(next) as (keyof SimInputs)[]).forEach((k) => set(k, next[k] as SimInputs[typeof k]));
               }}
               className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-right transition sm:items-start sm:gap-3 sm:p-3.5 ${
                 active
@@ -53,17 +64,40 @@ export default function SituationPicker({
               >
                 <Icon size={18} />
               </span>
-              <span>
+              <span className="min-w-0">
                 <span className="block text-[13.5px] font-semibold leading-snug text-slate-900 sm:text-[14.5px]">{s.title}</span>
                 <span className="mt-0.5 hidden text-[12.5px] leading-snug text-slate-500 sm:block">{s.description}</span>
+                <span className="mt-1 hidden text-[12px] leading-snug text-slate-500 sm:block">לדוגמה: {s.persona}</span>
+                <span className="mt-0.5 block text-[11.5px] font-medium leading-snug tabular-nums text-slate-700 sm:text-[12.5px]">
+                  {exampleLine(s)}
+                </span>
               </span>
             </button>
           );
         })}
       </div>
       <p className="mt-2 text-[12px] text-slate-500">
-        {current ? "אפשר לכוונן כל פרט בפאנל." : "בחרתם שילוב אחר בפאנל. אפשר לחזור לאחד המצבים כאן."}
+        {current
+          ? "בחירה ממלאת מספרים לדוגמה של משפחה טיפוסית. אפשר לשנות כל פרט בפאנל."
+          : "בחרתם שילוב אחר בפאנל. אפשר לחזור לאחד המצבים כאן."}
       </p>
+      <details className="group mt-1.5 text-[12px] text-slate-500">
+        <summary className="cursor-pointer select-none text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">
+          מאיפה המספרים לדוגמה?
+        </summary>
+        <ul className="mt-2 list-disc space-y-1 ps-4 leading-relaxed">
+          <li>
+            דירה ממוצעת נמכרה ב-{m(2_330_000)} בתחילת 2026. בצפון {m(1_510_000)}, ובבאר שבע {m(1_240_000)}.
+          </li>
+          <li>
+            משכנתא ממוצעת: דירה ראשונה {m(1_130_000)}, משפרי דיור {m(1_320_000)}, משקיעים {m(1_190_000)}. רק 60% ממשפרי
+            הדיור ו-45% מהמשקיעים לוקחים משכנתא בכלל.
+          </li>
+          <li>זוגות שקונים דירה ראשונה הם בני 30 בממוצע.</li>
+          <li>כל דוגמה עומדת במגבלות המימון של הבנקים.</li>
+        </ul>
+        <Sources ids={["cbsPrices", "boiLoans", "boiFirstBuyers"]} className="mt-2" />
+      </details>
     </div>
   );
 }

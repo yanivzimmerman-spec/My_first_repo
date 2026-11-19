@@ -280,5 +280,25 @@ ok(bad === 0, "fuzz: 3000+ random/extreme/garbage inputs, all finite, LTV never 
   ok(!/NaN|undefined|Infinity/.test(txt), "reasons text has no broken numbers");
 }
 
+// Situation cards: each example is the situation it describes, fits the bank limits as typed,
+// and its mortgage is in the range of the official average for that kind of buyer
+{
+  const { SITUATIONS, situationInputs, matchSituation } = await import("../lib/presets.ts");
+  // BOI box, May 2026 (average mortgage Oct 2024–Dec 2025); additional-apartment examples vs investors
+  const avgLoan = { single: 1_130_000, upgrader: 1_320_000, additional: 1_190_000 } as const;
+  for (const sit of SITUATIONS) {
+    const inp = sanitizeInputs({ ...DEFAULT_INPUTS, ...situationInputs(sit) });
+    const r = simulate(inp);
+    ok(matchSituation(inp) === sit.id, `${sit.id}: card is selected after clicking it`);
+    ok(r.realEstate.propertyPrice === sit.example.propertyPrice, `${sit.id}: example price is used as typed (not cut by the bank limit)`);
+    ok(r.realEstate.ltv <= r.realEstate.maxLtv + 1e-9 && !r.realEstate.equityShortfall, `${sit.id}: within the financing cap`);
+    const loan = r.realEstate.loanAmount;
+    ok(loan > 0.6 * avgLoan[inp.apartmentType] && loan < 1.25 * avgLoan[inp.apartmentType], `${sit.id}: mortgage ₪${Math.round(loan / 1000)}K near the average for this buyer`);
+  }
+  const eq = (id: string) => SITUATIONS.find((x) => x.id === id)!.example.equity;
+  ok(eq("firstInvest") < eq("firstHome"), "young buyers starting out have less money than a couple buying a home");
+  ok(eq("firstHome") < eq("secondInvest"), "a second apartment needs more cash (50% down + 8% tax)");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll tests passed");

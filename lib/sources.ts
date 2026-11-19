@@ -25,6 +25,15 @@ export const SOURCES = {
   prepay: { label: "בנק ישראל: עמלת פירעון מוקדם", url: "https://www.boi.org.il/media/qy5cow0l/116.pdf" },
   sp500Tax: { label: "ביזפורטל: מיסוי השקעה במדד", url: "https://www.bizportal.co.il/guides/news/article/20038659" },
   inflation: { label: "בנק ישראל: תחזית מקרו", url: "https://www.boi.org.il/media/kwrhjht1/forcast1026h1.pdf" },
+  cbsPrices: { label: "למ״ס: מחירי דירות ממוצעים (מאי 2026)", url: "https://www.cbs.gov.il/he/mediarelease/Madad/DocLib/2026/150/10_26_150b.pdf" },
+  boiLoans: {
+    label: "בנק ישראל: משכנתא ממוצעת לפי סוג רוכש (מאי 2026)",
+    url: "https://www.boi.org.il/media/gx1cuxlj/%D7%AA%D7%99%D7%91%D7%94-%D7%91%D7%A0%D7%95%D7%A9%D7%90-%D7%9E%D7%92%D7%9E%D7%95%D7%AA-%D7%91%D7%91%D7%99%D7%A6%D7%95%D7%A2%D7%99-%D7%94%D7%9C%D7%95%D7%95%D7%90%D7%95%D7%AA-%D7%9C%D7%93%D7%99%D7%95%D7%A8.pdf",
+  },
+  boiFirstBuyers: {
+    label: "בנק ישראל: מי קונה דירה ראשונה (2023)",
+    url: "https://www.boi.org.il/media/tt5be032/%D7%94%D7%95%D7%93%D7%A2%D7%94-%D7%9C%D7%A2%D7%99%D7%AA%D7%95%D7%A0%D7%95%D7%AA-%D7%9E%D7%90%D7%A4%D7%99%D7%99%D7%A0%D7%99-%D7%94%D7%A8%D7%95%D7%9B%D7%A9%D7%99%D7%9D-%D7%95%D7%94%D7%AA%D7%9E%D7%95%D7%A8%D7%95%D7%AA-%D7%A9%D7%97%D7%9C%D7%95-%D7%91%D7%A1%D7%99%D7%9B%D7%95%D7%99-%D7%9C%D7%A8%D7%9B%D7%95%D7%A9-%D7%93%D7%99%D7%A8%D7%94-%D7%9C%D7%A8%D7%90%D7%A9%D7%95%D7%A0%D7%94.docx",
+  },
 } as const;
 
 export type SourceId = keyof typeof SOURCES;
