@@ -14,7 +14,8 @@ for (let n = 0; n < 5000; n++) {
     c[k] = r < 0.08 ? b.min : r < 0.16 ? b.max : b.min + rand() * (b.max - b.min);
   }
   c.years = Math.round(c.years as number);
-  for (const k of ["autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "sellFirst", "liveInNew", "incomeCheck"]) c[k] = rand() < 0.5;
+  for (const k of ["autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "sellFirst", "liveInNew", "liveElsewhere", "incomeCheck", "ownRentAuto", "autoRate", "depreciation", "urbanRenewal"]) c[k] = rand() < 0.5;
+  for (const k of ["monthsToSell", "renewalYear"]) c[k] = Math.round(c[k] as number);
   c.apartmentType = pick(["single", "upgrader", "additional"]);
   c.spVehicle = pick(["israeli", "irish"]);
   cases.push(c as Partial<SimInputs>);

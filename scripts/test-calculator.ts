@@ -1,7 +1,7 @@
 /* Sanity + fuzz tests for lib/calculator.ts — run with `npm test`. */
 import {
   simulate, purchaseTax, spitzerPayment, sanitizeInputs, maxAffordablePrice, buyingCosts, sellingCostRate,
-  monthlyRentTax, surtax, breakEvenAppreciation, purchaseCash, paymentToIncome, BOUNDS, DEFAULT_INPUTS,
+  monthlyRentTax, surtax, breakEvenAppreciation, breakEvenRent, rateForTerm, purchaseCash, paymentToIncome, BOUNDS, DEFAULT_INPUTS,
   type SimInputs,
 } from "../lib/calculator.ts";
 
@@ -31,7 +31,7 @@ ok(near(monthlyRentTax(12_000, 5_654), 1_200, 0.01), "rent above 2× ceiling →
 ok(near(monthlyRentTax(10_000, 5_654, 6_000), 400, 0.01), "₪90K rule: 10% of (rent − own rent paid)");
 ok(near(monthlyRentTax(10_000, 5_654, 9_000), 250, 0.01), "₪90K rule: deduction capped at ₪7,500 a month");
 {
-  const rich = { ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 4_000_000, rentalYield: 4, ownRentPaid: 6_000 };
+  const rich = { ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 4_000_000, rentalYield: 4, ownRentAuto: false, ownRentPaid: 6_000 };
   ok(simulate({ ...rich, apartmentType: "single" }).realEstate.totalRentTax < simulate({ ...rich, ownRentPaid: 0 }).realEstate.totalRentTax, "living in a rental lowers the rent tax on a sole apartment");
   ok(simulate({ ...rich, apartmentType: "additional" }).realEstate.totalRentTax === simulate({ ...rich, apartmentType: "additional", ownRentPaid: 0 }).realEstate.totalRentTax, "no rent-paid deduction for an additional apartment");
 }
@@ -160,6 +160,46 @@ ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested,
   const coll = (1_600_000 * 3.5) / 1200 * 11 / 12;
   const oldColl = (5_000_000 * 3.5) / 1200 * 11 / 12; // ₪13,368 a month: alone above twice the ceiling
   ok(near(monthlyRentTax(oldColl + coll, 5_654) - monthlyRentTax(oldColl, 5_654), 0.1 * coll, 0.01), "above twice the ceiling, the extra tax is 10% of the new rent");
+}
+
+// Rules of thumb and the benchmark additions
+{
+  ok(rateForTerm(25) === 4.75 && rateForTerm(30) === 4.9 && rateForTerm(10) === 4.3, "rate by term: 4.3% at 10y, 4.75% at 25y, 4.9% at 30y");
+  ok(simulate({ ...DEFAULT_INPUTS, mortgageTerm: 30 }).inputs.mortgageRate === 4.9, "auto rate follows the term");
+  ok(simulate({ ...DEFAULT_INPUTS, autoRate: false, mortgageRate: 6, mortgageTerm: 30 }).inputs.mortgageRate === 6, "manual rate is kept");
+  // Own rent assumed ≈ rent received: a sole apartment above the ceiling pays (almost) no rent tax
+  const big = { ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 4_000_000, rentalYield: 4 };
+  ok(simulate(big).realEstate.totalRentTax < simulate({ ...big, ownRentAuto: false, ownRentPaid: 0 }).realEstate.totalRentTax, "auto own-rent deduction lowers the 10% rent tax");
+  // Dollar drift: a weaker dollar lowers the shekel return
+  ok(simulate({ ...DEFAULT_INPUTS, fxDrift: -1 }).sp500.netWorth < simulate({ ...DEFAULT_INPUTS, fxDrift: 0 }).sp500.netWorth, "a falling dollar lowers the S&P in shekels");
+  // Owner costs move the result toward the S&P
+  // With matching, extra apartment costs come out of pocket and the S&P track invests the same,
+  // so they show up in the gap between the tracks
+  const gapOf = (o: Partial<typeof DEFAULT_INPUTS>) => {
+    const r = simulate({ ...DEFAULT_INPUTS, ...o });
+    return r.realEstate.netWorth - r.sp500.netWorth;
+  };
+  ok(gapOf({}) < gapOf({ capexRate: 0, vacancyOwnerCost: 0 }), "renovation reserve and vacant-month costs move the result toward the S&P");
+  ok(gapOf({ managementFee: 8 }) < gapOf({}), "management fee moves the result toward the S&P");
+  // CPI-linked share: more inflation → more expensive
+  const cpi = (inf: number) => simulate({ ...DEFAULT_INPUTS, cpiShare: 50, inflation: inf }).realEstate.remainingMortgage;
+  ok(cpi(3) > cpi(1), "CPI-linked balance grows with inflation");
+  // Variable rate shock raises payments from year 2
+  ok(simulate({ ...DEFAULT_INPUTS, variableShare: 50, rateShock: 2 }).realEstate.totalInterestPaid > simulate({ ...DEFAULT_INPUTS, variableShare: 50 }).realEstate.totalInterestPaid, "variable-rate shock raises interest");
+  // Sale-side options
+  ok(simulate({ ...DEFAULT_INPUTS, monthsToSell: 4 }).realEstate.sellDelayCost > 0, "months on the market cost money");
+  const add = { ...DEFAULT_INPUTS, apartmentType: "additional" as const, equity: 1_000_000, propertyPrice: 1_600_000 };
+  ok(simulate({ ...add, depreciation: true }).realEstate.shevachTax > simulate(add).realEstate.shevachTax, "notional depreciation raises מס שבח");
+  const ren = simulate({ ...DEFAULT_INPUTS, urbanRenewal: true, renewalUplift: 30, renewalYear: 8 }).realEstate;
+  ok(ren.renewalLevy > 0 && ren.renewalIncomeLost > 0 && ren.finalPropertyValue > simulate(DEFAULT_INPUTS).realEstate.finalPropertyValue, "urban renewal: value jump, levy and lost rent while building");
+  ok(simulate({ ...DEFAULT_INPUTS, ageDrag: 0.5 }).realEstate.finalPropertyValue < simulate(DEFAULT_INPUTS).realEstate.finalPropertyValue, "building age lowers the value");
+  // Break-even rent equalises the tracks
+  const ber = breakEvenRent(DEFAULT_INPUTS);
+  if (ber.value !== null) {
+    const y = (ber.value * 1200) / simulate(DEFAULT_INPUTS).realEstate.propertyPrice;
+    const at = simulate({ ...DEFAULT_INPUTS, rentalYield: y });
+    ok(Math.abs(at.realEstate.netWorth - at.sp500.netWorth) < 50, `at break-even rent ₪${Math.round(ber.value)} both tracks end equal`);
+  } else ok(false, "break-even rent exists for defaults");
 }
 
 // Loan to invest in the S&P

@@ -41,13 +41,45 @@ function rentTaxOf(collected: number, ownRent = 0): number {
   return Math.min(0.1 * Math.max(0, collected - deduction), 0.1 * (collected - exempt));
 }
 
-/** oldCollected > 0: another apartment's rent already uses the household ceiling; tax is the extra. */
-function expectedNetRent(price: number, yieldPct: number, ownRent = 0, living = false, oldCollected = 0): number {
+/**
+ * Independent month-1 net rent. oldCollected > 0: another apartment's rent already uses the
+ * household ceiling, so the tax is the extra. `owner` holds the month-1 owner costs that don't
+ * depend on rent: capex on the new apartment's value and insurance (building + life on the loan).
+ */
+function expectedNetRent(
+  price: number,
+  yieldPct: number,
+  ownRent: number | "auto",
+  living: boolean,
+  oldCollected: number,
+  owner: { capexAndInsurance: number; vacancyCost: number; managementPct: number },
+): number {
   const gross = (price * yieldPct) / 100 / 12;
-  if (living) return gross - 0.08 * gross - 150; // saved rent: no vacancy, no tax
+  if (living) return gross - 0.08 * gross - owner.capexAndInsurance; // saved rent: no vacancy, no tax
   const collected = (gross * 11) / 12;
-  const tax = oldCollected > 0 ? rentTaxOf(oldCollected + collected) - rentTaxOf(oldCollected) : rentTaxOf(collected, ownRent);
-  return collected - tax - 0.08 * collected - 150;
+  const deduction = ownRent === "auto" ? gross : ownRent;
+  const tax = oldCollected > 0 ? rentTaxOf(oldCollected + collected) - rentTaxOf(oldCollected) : rentTaxOf(collected, deduction);
+  const costs = 0.08 * collected + owner.vacancyCost / 12 + (collected * owner.managementPct) / 100 + owner.capexAndInsurance;
+  return collected - tax - costs;
+}
+
+/** Closed-form mortgage over its tracks: fixed, variable (rate shift from month 13), CPI-linked. */
+function mortgageTracks(inp: SimInputs, L: number) {
+  const iM = Math.pow(1 + inp.inflation / 100, 1 / 12) - 1;
+  const cpiL = (L * inp.cpiShare) / 100;
+  const varL = (L * inp.variableShare) / 100;
+  const fixL = L - cpiL - varL;
+  const n = inp.mortgageTerm;
+  const v12 = spitzerBalance(varL, inp.mortgageRate, n, 12);
+  const shocked = inp.rateShock !== 0 && varL > 0;
+  const r1 = Math.max(0.1, inp.mortgageRate + inp.rateShock);
+  const balance = (k: number) =>
+    spitzerBalance(fixL, inp.mortgageRate, n, k) +
+    (!shocked || k <= 12 ? spitzerBalance(varL, inp.mortgageRate, n, k) : spitzerBalance(v12, r1, n - 1, k - 12)) +
+    spitzerBalance(cpiL, inp.cpiRealRate, n, k) * Math.pow(1 + iM, k);
+  const firstPayment =
+    spitzerPayment(fixL, inp.mortgageRate, n) + spitzerPayment(varL, inp.mortgageRate, n) + spitzerPayment(cpiL, inp.cpiRealRate, n) * (1 + iM);
+  return { balance, firstPayment };
 }
 
 const TYPES: ApartmentType[] = ["single", "upgrader", "additional"];
@@ -64,9 +96,9 @@ const OLD_HOMES: Partial<SimInputs>[] = [
   { oldHomeValue: 2_000_000, oldHomeMortgage: 1_500_000, sellFirst: false },
 ];
 const MARKETS: Record<string, Partial<SimInputs>> = {
-  low: { mortgageRate: 2.5, rentalYield: 2.2, rentGrowth: 1, appreciation: 1, spReturn: 5, spFee: 0.05, inflation: 1 },
+  low: { autoRate: false, cpiShare: 35, variableShare: 30, rateShock: 2, mortgageRate: 2.5, rentalYield: 2.2, rentGrowth: 1, appreciation: 1, spReturn: 5, spFee: 0.05, inflation: 1 },
   base: {},
-  high: { mortgageRate: 7.5, rentalYield: 4.5, rentGrowth: 5, appreciation: 7, spReturn: 12, spFee: 0.5, inflation: 4, ownRentPaid: 9_000 },
+  high: { autoRate: false, managementFee: 8, monthsToSell: 4, ageDrag: 0.3, depreciation: true, urbanRenewal: true, renewalYear: 4, fxDrift: -1.5, capexRate: 1, mortgageRate: 7.5, rentalYield: 4.5, rentGrowth: 5, appreciation: 7, spReturn: 12, spFee: 0.5, inflation: 4, ownRentAuto: false, ownRentPaid: 9_000 },
 };
 
 const failures = new Map<string, { count: number; example: string }>();
@@ -155,7 +187,9 @@ function checkScenario(inp: SimInputs, r: SimResult) {
 
   // 4. Mortgage and loan balances match closed form
   const k = Math.min(months, inp.mortgageTerm * 12);
-  check(near(re.remainingMortgage, spitzerBalance(re.loanAmount, inp.mortgageRate, inp.mortgageTerm, k), 2), "mortgage balance (closed form)", ctx);
+  const tracks = mortgageTracks(inp, re.loanAmount);
+  check(near(re.remainingMortgage, tracks.balance(k), 2), "mortgage balance over its tracks (closed form)", ctx);
+  if (inp.autoRate) check(inp.mortgageRate === Math.round((4.3 + 0.03 * (inp.mortgageTerm - 10)) * 20) / 20, "auto rate follows the term rule", ctx);
   if (inp.loanEnabled) {
     const kl = Math.min(months, inp.loanTerm * 12);
     check(near(re.extraLoanRemaining, spitzerBalance(inp.loanAmount, inp.loanRate, inp.loanTerm, kl), 2), "loan balance (closed form)", ctx);
@@ -172,9 +206,16 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   check(re.rentsOutBoth === both, "additional + live elsewhere → both apartments rented out", ctx);
   const rentBase = rentOld ? inp.oldHomeValue : re.propertyPrice;
   const oldCollected = both ? ((inp.oldHomeValue * inp.rentalYield) / 1200) * (11 / 12) : 0;
-  const expNet = expectedNetRent(rentBase, inp.rentalYield, inp.apartmentType === "additional" ? 0 : inp.ownRentPaid, living, oldCollected);
+  const value1 = re.propertyPrice * Math.pow(1 + (inp.appreciation - inp.ageDrag) / 100, 1 / 12);
+  const owner = {
+    capexAndInsurance: ((inp.capexRate / 100) * value1) / 12 + 50 + (100 * re.loanAmount) / 1e6,
+    vacancyCost: inp.vacancyOwnerCost,
+    managementPct: inp.managementFee,
+  };
+  const ownRent = inp.apartmentType === "additional" ? 0 : inp.ownRentAuto ? ("auto" as const) : inp.ownRentPaid;
+  const expNet = expectedNetRent(rentBase, inp.rentalYield, ownRent, living, oldCollected, owner);
   check(near(re.initialMonthlyRentNet, expNet, 0.01), "month-1 net rent (independent)", ctx);
-  const expPmt = spitzerPayment(re.loanAmount, inp.mortgageRate, inp.mortgageTerm);
+  const expPmt = tracks.firstPayment;
   const expLoanPmt = inp.loanEnabled ? spitzerPayment(inp.loanAmount, inp.loanRate, inp.loanTerm) : 0;
   check(near(re.initialMonthlyGap, expPmt + expLoanPmt - expNet, 0.01), "month-1 gap = mortgage + loan − net rent", ctx);
 
@@ -197,7 +238,9 @@ function checkScenario(inp: SimInputs, r: SimResult) {
 
   // 5. Year 0 values
   const p0 = r.points[0];
-  const re0 = start - re.purchaseTax - re.closingCosts - re.propertyPrice * sellingCostRate(inp.useBroker);
+  const sellDelay0 =
+    !living && !rentOld ? inp.monthsToSell * ((re.propertyPrice * inp.rentalYield) / 1200 + inp.vacancyOwnerCost) : 0;
+  const re0 = start - re.purchaseTax - re.closingCosts - re.propertyPrice * sellingCostRate(inp.useBroker) - sellDelay0;
   check(near(p0.realEstate, re0, 1), "year 0: apartment = equity − tax − buy/sell costs", ctx);
   check(near(p0.sp500, start, 0.01), "year 0: S&P = start capital", ctx);
   check(r.points.length === inp.years + 1, "one point per year", ctx);
@@ -219,13 +262,20 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   } else {
     check(!re.shevachExempt, "additional apt never exempt", ctx);
   }
-  const nominalGain = Math.max(0, re.finalPropertyValue - re.sellingCosts - re.propertyPrice - re.purchaseTax - re.closingCosts);
-  check(re.shevachTax <= CAPITAL_GAINS_TAX_RATE * nominalGain + 0.01, "מס שבח ≤ 25% of nominal gain", ctx);
+  // Notional depreciation lowers the cost basis, so it can push the taxed gain above the nominal gain
+  const nominalGain = Math.max(
+    0,
+    re.finalPropertyValue - re.sellingCosts - re.renewalLevy - re.propertyPrice - re.purchaseTax - re.closingCosts + re.depreciationDeducted,
+  );
+  check(re.shevachTax <= CAPITAL_GAINS_TAX_RATE * nominalGain + 0.01, "מס שבח ≤ 25% of nominal gain (+ notional depreciation)", ctx);
+  check(re.depreciationDeducted === 0 || (inp.depreciation && inp.apartmentType === "additional"), "depreciation only for an additional apartment, when chosen", ctx);
   // Cost basis = own money + borrowed money invested + matching deposits
   const spBasisNominal = start + sp.loanPrincipal + (inp.cashflowMatching ? sp.monthlyContributionsTotal - sumSpLoanPayments(inp, months) : 0);
   check(sp.capitalGainsTax <= CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - spBasisNominal) + 0.01 || inp.spVehicle === "irish", "S&P tax ≤ 25% of nominal gain (Israeli fund)", ctx);
-  if (inp.spVehicle === "irish") {
-    check(near(sp.capitalGainsTax, CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - spBasisNominal), 1), "Irish ETF: 25% of nominal gain", ctx);
+  if (inp.spVehicle === "irish" && !inp.cashflowMatching && !inp.spLoanEnabled) {
+    // Irish ETF: the cost basis follows the dollar (section 88)
+    const basisUsd = start * Math.pow(1 + inp.fxDrift / 100, inp.years);
+    check(near(sp.capitalGainsTax, CAPITAL_GAINS_TAX_RATE * Math.max(0, sp.grossValue - basisUsd), 1), "Irish ETF: 25% of the gain over a dollar-indexed basis", ctx);
   }
   const thr = SURTAX_THRESHOLD * Math.pow(1 + inp.inflation / 100, Math.max(0, inp.years - 1));
   if (sp.capitalGainsTax / CAPITAL_GAINS_TAX_RATE <= thr) check(sp.surtax === 0, "no S&P surtax below threshold", ctx);
@@ -233,14 +283,14 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   // 8. S&P without matching: closed form
   if (!inp.cashflowMatching && !inp.spLoanEnabled) {
     const drag = inp.spVehicle === "israeli" ? 0.0032 : 0.0019;
-    const annual = (1 + inp.spReturn / 100) * (1 - inp.spFee / 100) - 1 - drag;
+    const annual = (1 + inp.spReturn / 100) * (1 + inp.fxDrift / 100) * (1 - inp.spFee / 100) - 1 - drag;
     const expected = start * Math.pow(1 + annual, inp.years);
     check(near(sp.grossValue, expected, Math.max(1, expected * 1e-9)), "S&P value (closed form, no matching)", ctx);
   }
 
   // 9. Net worth identity at the end
   const reNet =
-    re.finalPropertyValue - re.sellingCosts - re.remainingMortgage - re.extraLoanRemaining - re.shevachTax - re.surtax +
+    re.finalPropertyValue - re.sellingCosts - re.renewalLevy - re.sellDelayCost - re.remainingMortgage - re.extraLoanRemaining - re.shevachTax - re.surtax +
     re.sideFundValue - re.sideFundTax + re.idleCash;
   check(near(reNet, re.netWorth, 1), "apartment net worth identity", ctx);
   check(near(sp.grossValue - sp.capitalGainsTax - sp.surtax - sp.loanRemaining, sp.netWorth, 1), "S&P net worth identity", ctx);
@@ -294,7 +344,7 @@ for (const apartmentType of TYPES)
 
 // --- Monotonicity (one input changes, all else fixed, price below every cap) --
 // Old home fully mortgaged → no proceeds, so every type starts with the same ₪1.5M.
-const base: SimInputs = { ...DEFAULT_INPUTS, equity: 1_500_000, propertyPrice: 1_500_000, oldHomeValue: 600_000, oldHomeMortgage: 600_000 };
+const base: SimInputs = { ...DEFAULT_INPUTS, autoRate: false, equity: 1_500_000, propertyPrice: 1_500_000, oldHomeValue: 600_000, oldHomeMortgage: 600_000 };
 function mono(rule: string, key: keyof SimInputs, lo: number, hi: number, pick: (r: SimResult) => number, dir: 1 | -1) {
   for (const apartmentType of TYPES)
     for (const cashflowMatching of BOOLS) {

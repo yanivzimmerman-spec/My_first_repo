@@ -96,34 +96,67 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
   const extraAtStart = Math.max(0, down - price) + (oldNet - usableOld);
 
   const N = x.years * 12;
-  const mort = annuity(mortgage, x.mortgageRate, x.mortgageTerm);
+  const iM = Math.pow(1 + x.inflation / 100, 1 / 12) - 1;
+
+  // --- Mortgage tracks, each in closed form -----------------------------------
+  const cpiL = (mortgage * x.cpiShare) / 100;
+  const varL = (mortgage * x.variableShare) / 100;
+  const fixL = mortgage - cpiL - varL;
+  const fixed = annuity(fixL, x.mortgageRate, x.mortgageTerm);
+  const var0 = annuity(varL, x.mortgageRate, x.mortgageTerm);
+  // the variable rate changes from month 13: re-amortise the year-1 balance over the remaining term
+  const shocked = x.rateShock !== 0 && varL > 0;
+  const var1 = shocked
+    ? annuity(var0.balanceAfter(12), Math.max(0.1, x.mortgageRate + x.rateShock), x.mortgageTerm - 1)
+    : var0;
+  const varPay = (m: number) => (!shocked || m <= 12 ? var0.paymentIn(m) : var1.paymentIn(m - 12));
+  const varBal = (k: number) => (!shocked || k <= 12 ? var0.balanceAfter(k) : var1.balanceAfter(k - 12));
+  const cpiReal = annuity(cpiL, x.cpiRealRate, x.mortgageTerm); // real annuity; payment & balance × CPI index
+  const cpiPay = (m: number) => cpiReal.paymentIn(m) * Math.pow(1 + iM, m);
+  const cpiBal = (k: number) => cpiReal.balanceAfter(k) * Math.pow(1 + iM, k);
+  const mortPay = (m: number) => fixed.paymentIn(m) + varPay(m) + cpiPay(m);
+  const mortBal = (k: number) => fixed.balanceAfter(k) + varBal(k) + cpiBal(k);
+
   const dpLoan = annuity(loan, x.loanRate, x.loanTerm);
   const spLoanP = x.spLoanEnabled ? x.spLoanAmount : 0;
   const spLoan = annuity(spLoanP, x.spLoanRate, x.spLoanTerm);
 
-  // --- Fund lots -------------------------------------------------------------
+  // --- Apartment value: market growth minus age drag, optional renewal jump ---
+  const g = (x.appreciation - x.ageDrag) / 100;
+  const renewal = x.urbanRenewal && x.renewalYear <= x.years;
+  const valueAt = (month: number) =>
+    price * Math.pow(1 + g, month / 12) * (renewal && month >= x.renewalYear * 12 ? 1 + x.renewalUplift / 100 : 1);
+  const building = (m: number) => renewal && m > (x.renewalYear - 3) * 12 && m <= x.renewalYear * 12;
+
+  // --- Fund lots (shekel return includes the dollar drift) ---------------------
   const drag = x.spVehicle === "israeli" ? 0.0032 : 0.0019;
-  const annual = Math.max(-0.99, (1 + x.spReturn / 100) * (1 - x.spFee / 100) - 1 - drag);
+  const fx = x.fxDrift / 100;
+  const annual = Math.max(-0.99, (1 + x.spReturn / 100) * (1 + fx) * (1 - x.spFee / 100) - 1 - drag);
   const rM = Math.pow(1 + annual, 1 / 12) - 1;
-  const iM = Math.pow(1 + x.inflation / 100, 1 / 12) - 1;
-  const indexBasis = x.spVehicle === "israeli";
+  // basis index: CPI for an Israeli fund, the dollar for an Irish ETF
+  const bM = x.spVehicle === "israeli" ? iM : Math.pow(1 + fx, 1 / 12) - 1;
   type Lot = { amount: number; month: number };
   const valueOf = (lots: Lot[]) => lots.reduce((s, l) => s + l.amount * Math.pow(1 + rM, N - l.month), 0);
-  const basisOf = (lots: Lot[]) =>
-    lots.reduce((s, l) => s + l.amount * (indexBasis ? Math.pow(1 + iM, N - l.month) : 1), 0);
+  const basisOf = (lots: Lot[]) => lots.reduce((s, l) => s + l.amount * Math.pow(1 + bM, N - l.month), 0);
 
   const spLots: Lot[] = [{ amount: ownStart + spLoanP, month: 0 }];
   const sideLots: Lot[] = extraAtStart > 0 ? [{ amount: extraAtStart, month: 0 }] : [];
   let idle = 0;
   let rentTaxTotal = 0;
+  const both = additional && x.liveElsewhere;
+  const rentOld = additional && x.liveInNew && !both;
 
   for (let m = 1; m <= N; m++) {
     const y = Math.floor((m - 1) / 12);
+    const growth = Math.pow(1 + x.rentGrowth / 100, y);
+    const cpiY = Math.pow(1 + x.inflation / 100, y);
+    const rebuilding = building(m);
+    const newIdle = rebuilding && !rentOld; // the new apartment yields nothing while rebuilt
     // Additional apartment + moving in: the old apartment is the one rented out
-    const both = additional && x.liveElsewhere;
-    const rentedValue = additional && x.liveInNew && !both ? x.oldHomeValue : price;
-    const gross = ((rentedValue * x.rentalYield) / 1200) * Math.pow(1 + x.rentGrowth / 100, y);
+    const rentedValue = rentOld ? x.oldHomeValue : price;
+    const gross = newIdle ? 0 : ((rentedValue * x.rentalYield) / 1200) * growth;
     const received = living ? gross : (gross * 11) / 12;
+    const rentElsewhere = rebuilding && rentOld ? ((price * x.rentalYield) / 1200) * growth : 0;
     const ceiling = 5_654 * Math.pow(1 + x.inflation / 100, y); // frozen in year 1 (2027), indexed after
     const householdTax = (rent: number, deduction: number) => {
       if (rent <= ceiling) return 0;
@@ -133,16 +166,25 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
     let rentTax = 0;
     if (both) {
       // the old apartment is rented in both tracks; count only the extra tax the new rent causes
-      const oldReceived = (((x.oldHomeValue * x.rentalYield) / 1200) * Math.pow(1 + x.rentGrowth / 100, y) * 11) / 12;
+      const oldReceived = (((x.oldHomeValue * x.rentalYield) / 1200) * growth * 11) / 12;
       rentTax = householdTax(oldReceived + received, 0) - householdTax(oldReceived, 0);
     } else if (!living) {
-      rentTax = householdTax(received, additional ? 0 : Math.min(x.ownRentPaid, 7_500));
+      const ownRent = additional ? 0 : x.ownRentAuto ? gross : x.ownRentPaid;
+      rentTax = householdTax(received, Math.min(ownRent, 7_500));
     }
     rentTaxTotal += rentTax;
-    const running = 0.08 * received + 150 * Math.pow(1 + x.inflation / 100, y);
+    const balStart = mortBal(m - 1);
+    const running =
+      0.08 * received +
+      (living || newIdle ? 0 : (x.vacancyOwnerCost / 12) * cpiY) +
+      (living ? 0 : (received * x.managementFee) / 100) +
+      (rebuilding ? 0 : ((x.capexRate / 100) * valueAt(m)) / 12) +
+      50 * cpiY +
+      (100 * balStart) / 1e6 +
+      rentElsewhere;
     const netRent = received - rentTax - running;
 
-    const apartmentOut = mort.paymentIn(m) + dpLoan.paymentIn(m) - netRent;
+    const apartmentOut = mortPay(m) + dpLoan.paymentIn(m) - netRent;
     const spOut = spLoan.paymentIn(m);
     if (x.cashflowMatching) {
       const own = Math.max(apartmentOut, spOut);
@@ -155,9 +197,18 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
 
   // --- Sale at the end -------------------------------------------------------
   const tIdx = Math.pow(1 + x.inflation / 100, Math.max(0, x.years - 1)); // thresholds frozen in year 1
-  const value = price * Math.pow(1 + x.appreciation / 100, x.years);
+  const value = valueAt(N);
   const sellCosts = value * feeRate(x.useBroker);
-  const realGain = Math.max(0, value - sellCosts - (price + pTax + closing) * Math.pow(1 + iM, N));
+  const levy = renewal ? 0.25 * price * Math.pow(1 + g, x.renewalYear) * (x.renewalUplift / 100) : 0;
+  const dep = x.depreciation && additional && !rentOld ? Math.min(1, 0.02 * x.years) * (2 / 3) * price : 0;
+  const lastYear = Math.max(0, x.years - 1);
+  const sellDelay =
+    !living && !rentOld
+      ? x.monthsToSell *
+        (((price * x.rentalYield) / 1200) * Math.pow(1 + x.rentGrowth / 100, lastYear) +
+          x.vacancyOwnerCost * Math.pow(1 + x.inflation / 100, lastYear))
+      : 0;
+  const realGain = Math.max(0, value - sellCosts - levy - ((price + pTax + closing) * Math.pow(1 + iM, N) - dep));
   let taxable = realGain;
   if (!additional) {
     const ceil = 5_008_000 * tIdx;
@@ -174,7 +225,7 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
   const spSurtax = 0.05 * Math.max(0, spGain - threshold);
 
   const realEstate =
-    value - sellCosts - mort.balanceAfter(N) - dpLoan.balanceAfter(N) - shevach - reSurtax + sideV - 0.25 * sideGain + idle;
+    value - sellCosts - levy - sellDelay - mortBal(N) - dpLoan.balanceAfter(N) - shevach - reSurtax + sideV - 0.25 * sideGain + idle;
   const sp500 = spV - 0.25 * spGain - spSurtax - spLoan.balanceAfter(N);
   return { price, realEstate, sp500, rentTaxTotal, shevach, spTax: 0.25 * spGain };
 }

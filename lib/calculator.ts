@@ -43,8 +43,29 @@ export const BUY_FIXED_COSTS = 10_000;
 
 /** Landlord running costs */
 export const VACANCY_MONTHS_PER_YEAR = 1;
-export const MAINTENANCE_RATE = 0.08; // repairs reserve, % of rent collected
-export const INSURANCE_MONTHLY = 150; // building + mortgage life insurance, ₪ (indexed)
+export const MAINTENANCE_RATE = 0.08; // routine repairs, % of rent collected
+/** Building insurance, ₪ a month, CPI-indexed (owner, every mode) */
+export const BUILDING_INSURANCE_MONTHLY = 50;
+/** Mortgage life insurance: ₪ a month per ₪1M of balance (shrinks with the loan, ends at payoff) */
+export const LIFE_INSURANCE_PER_MILLION = 100;
+
+/** Urban renewal (optional): betterment levy share of the uplift, years without income while building */
+export const RENEWAL_LEVY_RATE = 0.25;
+export const RENEWAL_BUILD_YEARS = 3;
+
+/** Notional depreciation the Tax Authority deducts for rented years (contested in court) */
+export const DEPRECIATION_RATE = 0.02;
+export const BUILDING_SHARE_OF_PRICE = 2 / 3;
+
+/**
+ * Rule of thumb: longer mortgages cost more. Blended rate ≈ 4.3% at 10 years,
+ * +0.03 points per extra year (≈ 4.75% at 25, 4.9% at 30), rounded to 0.05.
+ * CPI-linked tracks run about 1.45 points lower in real terms.
+ */
+export function rateForTerm(termYears: number): number {
+  return Math.round((4.3 + 0.03 * (termYears - 10)) * 20) / 20;
+}
+export const CPI_REAL_RATE_GAP = 1.45;
 
 /** Rental income: monthly exemption ceiling (frozen 2024–2027), 10% track, marginal rate for the taper */
 export const RENT_EXEMPT_CEILING_MONTHLY = 5_654;
@@ -148,6 +169,28 @@ export interface SimInputs {
    * the new apartment's rent (the household shares one exemption ceiling) differs.
    */
   liveElsewhere: boolean;
+  /** Sole apartment rented out while living in a rental: assume own rent ≈ the rent received */
+  ownRentAuto: boolean;
+  /** USD/ILS change per year (%): shekel return of the S&P = (1 + USD return)(1 + drift) − 1 */
+  fxDrift: number;
+  /** Mortgage rate follows the term by rule of thumb */
+  autoRate: boolean;
+  /** Mortgage tracks: % CPI-linked (real rate) and % variable (rate can shift from year 2) */
+  cpiShare: number;
+  cpiRealRate: number;
+  variableShare: number;
+  rateShock: number;
+  /** Owner costs */
+  capexRate: number;
+  vacancyOwnerCost: number;
+  managementFee: number;
+  /** Sale-side options */
+  depreciation: boolean;
+  ageDrag: number;
+  monthsToSell: number;
+  urbanRenewal: boolean;
+  renewalUplift: number;
+  renewalYear: number;
   /** Optional bank-approval check: household's net monthly income */
   incomeCheck: boolean;
   monthlyIncome: number;
@@ -189,6 +232,18 @@ export const BOUNDS: Record<NumericKey, Bound> = {
   spLoanTerm: { min: 1, max: 20, step: 1 },
   monthlyIncome: { min: 5_000, max: 100_000, step: 500 },
   ownRentPaid: { min: 0, max: 20_000, step: 100 },
+  fxDrift: { min: -3, max: 2, step: 0.1 },
+  cpiShare: { min: 0, max: 100, step: 5 },
+  cpiRealRate: { min: 0.5, max: 6, step: 0.05 },
+  variableShare: { min: 0, max: 65, step: 5 },
+  rateShock: { min: -2, max: 4, step: 0.25 },
+  capexRate: { min: 0, max: 2, step: 0.1 },
+  vacancyOwnerCost: { min: 0, max: 3_000, step: 50 },
+  managementFee: { min: 0, max: 15, step: 1 },
+  ageDrag: { min: 0, max: 1, step: 0.05 },
+  monthsToSell: { min: 0, max: 12, step: 1 },
+  renewalUplift: { min: 0, max: 60, step: 5 },
+  renewalYear: { min: 4, max: 30, step: 1 },
 };
 
 export const DEFAULT_INPUTS: SimInputs = {
@@ -202,7 +257,7 @@ export const DEFAULT_INPUTS: SimInputs = {
   autoPrice: false,
   apartmentType: "single",
   useBroker: true,
-  mortgageRate: 4.8,
+  mortgageRate: 4.75, // = rateForTerm(25)
   mortgageTerm: 25,
   rentalYield: 3.2,
   rentGrowth: 3.0,
@@ -221,6 +276,22 @@ export const DEFAULT_INPUTS: SimInputs = {
   spLoanRate: 6.5,
   spLoanTerm: 10,
   ownRentPaid: 0,
+  ownRentAuto: true,
+  fxDrift: -0.5,
+  autoRate: true,
+  cpiShare: 0,
+  cpiRealRate: 3.3,
+  variableShare: 0,
+  rateShock: 0,
+  capexRate: 0.5,
+  vacancyOwnerCost: 900,
+  managementFee: 0,
+  depreciation: false,
+  ageDrag: 0,
+  monthsToSell: 0,
+  urbanRenewal: false,
+  renewalUplift: 20,
+  renewalYear: 10,
   liveInNew: false,
   liveElsewhere: false,
   incomeCheck: false,
@@ -296,7 +367,17 @@ export interface RealEstateSummary {
   totalInterestPaid: number;
   totalRentGross: number;
   totalVacancyLoss: number;
+  /** All owner costs: maintenance, vacancy costs, management, capex, insurance, rent while rebuilding */
   totalOwnershipCosts: number;
+  totalMaintenance: number;
+  totalVacancyCosts: number;
+  totalManagement: number;
+  totalCapex: number;
+  totalInsurance: number;
+  renewalIncomeLost: number;
+  renewalLevy: number;
+  sellDelayCost: number;
+  depreciationDeducted: number;
   totalRentTax: number;
   finalPropertyValue: number;
   remainingMortgage: number;
@@ -361,7 +442,7 @@ function safeNum(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-const BOOL_KEYS: BoolKey[] = ["liveElsewhere", "liveInNew", "sellFirst", "autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "incomeCheck"];
+const BOOL_KEYS: BoolKey[] = ["ownRentAuto", "autoRate", "depreciation", "urbanRenewal", "liveElsewhere", "liveInNew", "sellFirst", "autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "incomeCheck"];
 
 /** Coerce arbitrary (possibly URL-sourced) input into a valid SimInputs. */
 export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApartment", unknown>>): SimInputs {
@@ -374,6 +455,8 @@ export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApa
   out.mortgageTerm = Math.round(out.mortgageTerm);
   out.loanTerm = Math.round(out.loanTerm);
   out.spLoanTerm = Math.round(out.spLoanTerm);
+  out.monthsToSell = Math.round(out.monthsToSell);
+  out.renewalYear = Math.round(out.renewalYear);
   const bool = (v: unknown, d: boolean) =>
     typeof v === "boolean" ? v : v === "1" || v === "true" ? true : v === "0" || v === "false" ? false : d;
   BOOL_KEYS.forEach((k) => {
@@ -387,6 +470,12 @@ export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApa
   }
   const v = raw.spVehicle;
   if (v === "israeli" || v === "irish") out.spVehicle = v;
+  // Mortgage rate by term (rule of thumb) unless set by hand; tracks can't exceed 100%
+  if (out.autoRate) {
+    out.mortgageRate = rateForTerm(out.mortgageTerm);
+    out.cpiRealRate = Math.max(BOUNDS.cpiRealRate.min, out.mortgageRate - CPI_REAL_RATE_GAP);
+  }
+  out.variableShare = Math.min(out.variableShare, 100 - out.cpiShare);
   // Money usable on purchase day is at least ₪200K, so the cheapest apartment is always
   // affordable within the bank limit (a buy-first upgrader may have no bridge at all).
   out.oldHomeMortgage = Math.min(out.oldHomeMortgage, out.oldHomeValue);
@@ -591,13 +680,21 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
 
   // --- Rates -----------------------------------------------------------------
   const inflMonthly = Math.pow(1 + inflation / 100, 1 / 12) - 1;
-  const spNetAnnual = Math.max(-0.99, (1 + spReturn / 100) * (1 - spFee / 100) - 1 - DIVIDEND_DRAG[spVehicle]);
+  // S&P in shekels: the dollar return converted at the USD/ILS drift
+  const fx = inputs.fxDrift / 100;
+  const spNetAnnual = Math.max(-0.99, (1 + spReturn / 100) * (1 + fx) * (1 - spFee / 100) - 1 - DIVIDEND_DRAG[spVehicle]);
   const spMonthly = Math.pow(1 + spNetAnnual, 1 / 12) - 1;
-  // Israeli tracking funds: cost basis indexed to CPI. Irish ETFs: indexed to
-  // USD/ILS, assumed flat, so the nominal gain is taxed.
-  const basisMonthly = spVehicle === "israeli" ? inflMonthly : 0;
-  const mortMonthly = mortgageRate / 100 / 12;
-  const g = appreciation / 100;
+  // Cost basis: Israeli tracking fund → CPI; Irish ETF → the dollar rate (section 88)
+  const basisMonthly = spVehicle === "israeli" ? inflMonthly : Math.pow(1 + fx, 1 / 12) - 1;
+  // Building-age drag lowers the apartment's growth below the market index
+  const g = (appreciation - inputs.ageDrag) / 100;
+  // Optional urban renewal: value jumps at the renewal year after a construction period
+  const renewal = inputs.urbanRenewal && inputs.renewalYear <= years;
+  const renewalMonth = inputs.renewalYear * 12;
+  const upliftAmount = renewal ? price * Math.pow(1 + g, inputs.renewalYear) * (inputs.renewalUplift / 100) : 0;
+  const valueAt = (month: number) =>
+    price * Math.pow(1 + g, month / 12) * (renewal && month >= renewalMonth ? 1 + inputs.renewalUplift / 100 : 1);
+  const underConstruction = (m: number) => renewal && m > renewalMonth - RENEWAL_BUILD_YEARS * 12 && m <= renewalMonth;
   /** Frozen-through-2027 thresholds: flat in year 1, CPI-indexed after. */
   const thresholdIndex = (tYears: number) => Math.pow(1 + inflation / 100, Math.max(0, tYears - 1));
 
@@ -613,8 +710,15 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const unusedCash = Math.max(0, downPaymentRaw - price) + laterOldHomeCash;
   const maxLtv = maxLtvFor(apartmentType, inputs.sellFirst);
   const ltv = price > 0 ? loanAmount / price : 0;
-  const pmt = spitzerPayment(loanAmount, mortgageRate, mortgageTerm);
   const termMonths = mortgageTerm * 12;
+  // Mortgage tracks: fixed nominal, variable (rate may shift from year 2), CPI-linked (real rate)
+  const cpiLoan = (loanAmount * inputs.cpiShare) / 100;
+  const varLoan = (loanAmount * inputs.variableShare) / 100;
+  const fixedLoan = loanAmount - cpiLoan - varLoan;
+  const fixedPmt = spitzerPayment(fixedLoan, mortgageRate, mortgageTerm);
+  let varRate = mortgageRate;
+  let varPmt = spitzerPayment(varLoan, mortgageRate, mortgageTerm);
+  const cpiRealPmt = spitzerPayment(cpiLoan, inputs.cpiRealRate, mortgageTerm);
   const costBasis = price + pTax + closing;
   const sellRate = sellingCostRate(useBroker);
 
@@ -629,7 +733,13 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const spLoanTermMonths = inputs.spLoanTerm * 12;
 
   // --- State -----------------------------------------------------------------
+  let fixedBal = fixedLoan;
+  let varBal = varLoan;
+  let cpiRealBal = cpiLoan;
+  let cpiIndex = 1;
+  const mortgageBalance = () => fixedBal + varBal + cpiRealBal * cpiIndex;
   let balance = loanAmount;
+  let firstPayment = 0;
   let extraBalance = extraPrincipal;
   let sp = equity + spLoanPrincipal; // borrowed money is invested on day one
   let spBasis = equity + spLoanPrincipal;
@@ -645,6 +755,12 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   let rentGrossTotal = 0;
   let vacancyTotal = 0;
   let ownershipTotal = 0;
+  let maintenanceTotal = 0;
+  let vacancyCostTotal = 0;
+  let managementTotal = 0;
+  let capexTotal = 0;
+  let insuranceTotal = 0;
+  let renewalIncomeLost = 0;
   let rentTaxTotal = 0;
   let initialRentGross = 0;
   let initialRentNet = 0;
@@ -656,9 +772,25 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const snapshot = (month: number) => {
     const t = month / 12;
     const idx = thresholdIndex(t);
-    const propertyValue = price * Math.pow(1 + g, t);
+    const propertyValue = valueAt(month);
     const sellCosts = propertyValue * sellRate;
-    const realGain = Math.max(0, propertyValue - sellCosts - costBasis * Math.pow(1 + inflMonthly, month));
+    const levy = renewal && month >= renewalMonth ? RENEWAL_LEVY_RATE * upliftAmount : 0;
+    // Notional depreciation on a rented additional apartment (optional; contested in court)
+    const depreciation =
+      inputs.depreciation && apartmentType === "additional" && !rentsOutOld(inputs)
+        ? Math.min(1, DEPRECIATION_RATE * t) * BUILDING_SHARE_OF_PRICE * price
+        : 0;
+    const realGain = Math.max(
+      0,
+      propertyValue - sellCosts - levy - (costBasis * Math.pow(1 + inflMonthly, month) - depreciation),
+    );
+    // Months on the market: a rented-out new apartment stands empty and the owner pays its upkeep
+    const sellingNewRented = !livesInNew(inputs) && !rentsOutOld(inputs);
+    const rentNow =
+      ((price * rentalYield) / 1200) * Math.pow(1 + rentGrowth / 100, Math.max(0, Math.ceil(t) - 1));
+    const sellDelay = sellingNewRented
+      ? inputs.monthsToSell * (rentNow + inputs.vacancyOwnerCost * Math.pow(1 + inflation / 100, Math.max(0, Math.ceil(t) - 1)))
+      : 0;
 
     // מס שבח
     let taxableGain = realGain;
@@ -689,7 +821,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     const spSurtax = surtax(spGain, threshold);
 
     const realEstate =
-      propertyValue - sellCosts - balance - extraBalance - shevach - reSurtax + (side - sideTax) + idleCash;
+      propertyValue - sellCosts - levy - sellDelay - balance - extraBalance - shevach - reSurtax + (side - sideTax) + idleCash;
     const sp500 = sp - spTax - spSurtax - spLoanBalance;
     return {
       point: {
@@ -708,6 +840,9 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
       spTax,
       reSurtax,
       spSurtax,
+      levy,
+      sellDelay,
+      depreciation,
     };
   };
 
@@ -717,15 +852,45 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   for (let m = 1; m <= totalMonths; m++) {
     const yearIdx = Math.floor((m - 1) / 12);
 
-    // 1. Mortgage (Spitzer)
+    // 1. Mortgage tracks (Spitzer each)
+    const balanceAtStart = mortgageBalance();
     let payment = 0;
-    if (balance > 0 && m <= termMonths) {
-      const interest = balance * mortMonthly;
-      payment = Math.min(pmt, balance + interest);
-      balance = balance + interest - payment;
-      if (balance < 0.005) balance = 0;
-      interestPaid += interest;
+    if (m <= termMonths) {
+      if (fixedBal > 0) {
+        const it = (fixedBal * mortgageRate) / 1200;
+        const p = Math.min(fixedPmt, fixedBal + it);
+        fixedBal = fixedBal + it - p;
+        if (fixedBal < 0.005) fixedBal = 0;
+        interestPaid += it;
+        payment += p;
+      }
+      if (varBal > 0) {
+        if (m === 13 && inputs.rateShock !== 0) {
+          varRate = Math.max(0.1, mortgageRate + inputs.rateShock);
+          varPmt = spitzerPayment(varBal, varRate, (termMonths - 12) / 12);
+        }
+        const it = (varBal * varRate) / 1200;
+        const p = Math.min(varPmt, varBal + it);
+        varBal = varBal + it - p;
+        if (varBal < 0.005) varBal = 0;
+        interestPaid += it;
+        payment += p;
+      }
+      if (cpiRealBal > 0) {
+        // CPI-linked: a real annuity whose payment and balance rise with the index
+        const before = cpiRealBal * cpiIndex;
+        cpiIndex *= 1 + inflMonthly;
+        const it = (cpiRealBal * inputs.cpiRealRate) / 1200;
+        const pReal = Math.min(cpiRealPmt, cpiRealBal + it);
+        cpiRealBal = cpiRealBal + it - pReal;
+        if (cpiRealBal < 1e-9) cpiRealBal = 0;
+        const pNominal = pReal * cpiIndex;
+        payment += pNominal;
+        interestPaid += pNominal - (before - cpiRealBal * cpiIndex); // interest + linkage
+      }
     }
+    balance = mortgageBalance();
+    if (m === 1) firstPayment = payment;
 
     // 2. Down-payment loan (Spitzer)
     let extraPayment = 0;
@@ -749,13 +914,22 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
 
     // 3. Rent: grows yearly; one vacant month a year; tax; landlord costs
     const rentBase = rentBaseValue(inputs, price);
-    const rentGross = Math.max(0, ((rentBase * rentalYield) / 100 / 12) * Math.pow(1 + rentGrowth / 100, yearIdx));
+    const growth = Math.pow(1 + rentGrowth / 100, yearIdx);
+    const cpiYear = Math.pow(1 + inflation / 100, yearIdx);
     // Living in it: the saved rent counts in full, with no vacancy and no rent tax
     const living = livesInNew(inputs);
+    // During an urban-renewal rebuild the new apartment yields nothing; if the owner lives in it
+    // while renting out the old one, they rent elsewhere meanwhile.
+    const building = underConstruction(m);
+    const newApartmentIdle = building && !rentsOutOld(inputs);
+    const rentGross = newApartmentIdle ? 0 : Math.max(0, ((rentBase * rentalYield) / 100 / 12) * growth);
     const collected = living ? rentGross : rentGross * (1 - VACANCY_MONTHS_PER_YEAR / 12);
+    const rentElsewhereWhileBuilding = building && rentsOutOld(inputs) ? ((price * rentalYield) / 1200) * growth : 0;
+    if (building) renewalIncomeLost += newApartmentIdle ? ((rentBase * rentalYield) / 1200) * growth : rentElsewhereWhileBuilding;
     const ceiling = RENT_EXEMPT_CEILING_MONTHLY * thresholdIndex(yearIdx + 1);
-    // The rent-paid deduction is for a sole-apartment owner only (not an additional apartment)
-    const ownRent = apartmentType === "additional" ? 0 : inputs.ownRentPaid;
+    // Rent-paid deduction (10% track): sole-apartment owner living in a rental. By default their
+    // own rent is assumed ≈ the market rent of the apartment they rent out (rule of thumb).
+    const ownRent = apartmentType === "additional" ? 0 : inputs.ownRentAuto ? rentGross : inputs.ownRentPaid;
     let rentTax = living ? 0 : monthlyRentTax(collected, ceiling, ownRent);
     if (rentsOutBoth(inputs)) {
       // The old apartment's rent uses the household's exemption first (it's rented in both
@@ -766,11 +940,23 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
         (1 - VACANCY_MONTHS_PER_YEAR / 12);
       rentTax = monthlyRentTax(oldCollected + collected, ceiling) - monthlyRentTax(oldCollected, ceiling);
     }
-    const ownership = collected * MAINTENANCE_RATE + INSURANCE_MONTHLY * Math.pow(1 + inflation / 100, yearIdx);
+    // Owner costs
+    const maintenance = collected * MAINTENANCE_RATE;
+    const rentedApartmentIdle = living || newApartmentIdle; // nothing rented out this month
+    const vacancyCost = rentedApartmentIdle ? 0 : ((inputs.vacancyOwnerCost * VACANCY_MONTHS_PER_YEAR) / 12) * cpiYear;
+    const management = living ? 0 : (collected * inputs.managementFee) / 100;
+    const capex = building ? 0 : ((inputs.capexRate / 100) * valueAt(m)) / 12;
+    const insurance = BUILDING_INSURANCE_MONTHLY * cpiYear + (LIFE_INSURANCE_PER_MILLION * balanceAtStart) / 1e6;
+    const ownership = maintenance + vacancyCost + management + capex + insurance + rentElsewhereWhileBuilding;
     const rentNet = collected - rentTax - ownership;
     rentGrossTotal += rentGross;
     vacancyTotal += rentGross - collected;
     ownershipTotal += ownership;
+    maintenanceTotal += maintenance;
+    vacancyCostTotal += vacancyCost;
+    managementTotal += management;
+    capexTotal += capex;
+    insuranceTotal += insurance;
     rentTaxTotal += rentTax;
 
     // 4. Grow funds; index cost bases
@@ -844,12 +1030,12 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     maxPrice,
     priceCapped: !inputs.autoPrice && inputs.propertyPrice > maxPrice,
     equityShortfall,
-    monthlyMortgagePayment: pmt,
+    monthlyMortgagePayment: firstPayment,
     extraLoanPrincipal: extraPrincipal,
     extraLoanPayment: extraPmt,
     extraLoanInterestPaid: extraInterest,
     extraLoanRemaining: extraBalance,
-    paymentToIncome: inputs.incomeCheck ? paymentToIncome(inputs, pmt, extraPmt) : null,
+    paymentToIncome: inputs.incomeCheck ? paymentToIncome(inputs, firstPayment, extraPmt) : null,
     initialMonthlyRentGross: initialRentGross,
     initialMonthlyRentNet: initialRentNet,
     initialMonthlyGap: initialGap,
@@ -862,6 +1048,15 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     totalRentGross: rentGrossTotal,
     totalVacancyLoss: vacancyTotal,
     totalOwnershipCosts: ownershipTotal,
+    totalMaintenance: maintenanceTotal,
+    totalVacancyCosts: vacancyCostTotal,
+    totalManagement: managementTotal,
+    totalCapex: capexTotal,
+    totalInsurance: insuranceTotal,
+    renewalIncomeLost,
+    renewalLevy: last.levy,
+    sellDelayCost: last.sellDelay,
+    depreciationDeducted: last.depreciation,
     totalRentTax: rentTaxTotal,
     finalPropertyValue: last.point.propertyValue,
     remainingMortgage: balance,
@@ -915,24 +1110,43 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
 }
 
 /**
- * The yearly apartment-price growth at which both tracks end equal, all else
- * unchanged. The S&P result doesn't depend on property prices, and the
- * apartment result rises with them, so a bisection finds it.
- * Returns null when the answer is outside the slider range (−2%…10%).
+ * Generic break-even: the value of one input at which both tracks end equal.
+ * The gap (apartment − S&P) rises with the input; bisection within the slider range.
+ * Both tracks are re-simulated, since the S&P track's monthly deposits follow the
+ * apartment's cash flow (e.g., the renovation reserve grows with the property's value).
  */
-export function breakEvenAppreciation(inputs: SimInputs): { value: number | null; below: boolean } {
-  const target = simulate(inputs).sp500.netWorth;
-  const reAt = (a: number) => simulate({ ...inputs, appreciation: a }).realEstate.netWorth;
-  const LO = BOUNDS.appreciation.min;
-  const HI = BOUNDS.appreciation.max;
-  if (reAt(LO) >= target) return { value: null, below: true }; // apartment wins even at −2%
-  if (reAt(HI) < target) return { value: null, below: false }; // S&P wins even at the maximum
+function breakEven(inputs: SimInputs, key: "appreciation" | "rentalYield"): { value: number | null; below: boolean } {
+  const gap = (v: number) => {
+    const r = simulate({ ...inputs, [key]: v });
+    return r.realEstate.netWorth - r.sp500.netWorth;
+  };
+  const LO = BOUNDS[key].min;
+  const HI = BOUNDS[key].max;
+  if (gap(LO) >= 0) return { value: null, below: true }; // the apartment wins even at the minimum
+  if (gap(HI) < 0) return { value: null, below: false }; // the S&P wins even at the maximum
   let lo = LO;
   let hi = HI;
   for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2;
-    if (reAt(mid) >= target) hi = mid;
+    if (gap(mid) >= 0) hi = mid;
     else lo = mid;
   }
   return { value: hi, below: false };
+}
+
+/** Yearly price growth at which both tracks end equal (null outside −2%…10%). */
+export function breakEvenAppreciation(inputs: SimInputs): { value: number | null; below: boolean } {
+  return breakEven(inputs, "appreciation");
+}
+
+/**
+ * Monthly rent (first year, in ₪) at which both tracks end equal; in live-in mode,
+ * the rent saved. Null when outside the slider's 1%–7% yield range.
+ */
+export function breakEvenRent(inputs: SimInputs): { value: number | null; below: boolean } {
+  const r = breakEven(inputs, "rentalYield");
+  if (r.value === null) return r;
+  const x = sanitizeInputs(inputs);
+  const base = rentBaseValue(x, effectivePropertyPrice(x));
+  return { value: (base * r.value) / 1200, below: false };
 }
