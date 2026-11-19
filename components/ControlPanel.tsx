@@ -132,6 +132,26 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             ]}
           />
           <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{TYPE_TEXT[type]}</p>
+          {type !== "additional" && (
+            <div className="mt-4">
+              <p className="mb-2 text-[15px] text-slate-700">מה תעשו בדירה החדשה?</p>
+              <Segmented
+                ariaLabel="מגורים או השכרה"
+                accent={RE}
+                value={inputs.liveInNew ? "live" : "rent"}
+                onChange={(v) => set("liveInNew", v === "live")}
+                options={[
+                  { value: "rent", label: "משכירים" },
+                  { value: "live", label: "גרים בה" },
+                ]}
+              />
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+                {inputs.liveInNew
+                  ? "במקום לקבל שכר דירה, חוסכים את השכירות שהייתם משלמים. במסלול ה-S&P גרים בשכירות."
+                  : "משכירים את הדירה ומקבלים שכר דירה. אתם גרים במקום אחר."}
+              </p>
+            </div>
+          )}
         </div>
 
         {type === "upgrader" && (
@@ -227,7 +247,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         </div>
 
         <SliderInput
-          label="שכר דירה חודשי"
+          label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : "שכר דירה חודשי"}
           kind="currency"
           value={Math.round(rent / 10) * 10}
           bound={rentBound}
@@ -235,8 +255,17 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           onChange={(v) => set("rentalYield", Math.min(BOUNDS.rentalYield.max, Math.max(BOUNDS.rentalYield.min, (v * 1200) / price)))}
           hint={
             <>
-              אחרי חודש פנוי בשנה, תחזוקה, ביטוח ומס, נשארים לכם בערך{" "}
-              <span className="font-semibold text-slate-800">{formatILS(re.initialMonthlyRentNet)}</span> בחודש
+              {re.livesInNew ? (
+                <>
+                  זה מה שהייתם משלמים בשכירות. אחרי תחזוקה וביטוח, אתם חוסכים בערך{" "}
+                  <span className="font-semibold text-slate-800">{formatILS(re.initialMonthlyRentNet)}</span> בחודש
+                </>
+              ) : (
+                <>
+                  אחרי חודש פנוי בשנה, תחזוקה, ביטוח ומס, נשארים לכם בערך{" "}
+                  <span className="font-semibold text-slate-800">{formatILS(re.initialMonthlyRentNet)}</span> בחודש
+                </>
+              )}
             </>
           }
         />
@@ -458,7 +487,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               accent={RE}
               onChange={(v) => set("rentGrowth", v)}
             />
-            {type !== "additional" && (
+            {type !== "additional" && !re.livesInNew && (
               <SliderInput
                 label="שכר דירה שאתם משלמים בעצמכם"
                 kind="currency"

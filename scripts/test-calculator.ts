@@ -26,7 +26,7 @@ ok(near(sellingCostRate(true), 0.0295, 1e-9), "selling costs 2.95% with broker")
 
 // Rental tax tracks
 ok(monthlyRentTax(5_654, 5_654) === 0, "rent at ceiling → exempt");
-ok(near(monthlyRentTax(6_000, 5_654), Math.min(600, 0.31 * (6_000 - (2 * 5_654 - 6_000))), 0.01), "rent in taper → cheaper of 10% and taper");
+ok(near(monthlyRentTax(6_000, 5_654), 0.1 * (6_000 - (2 * 5_654 - 6_000)), 0.01), "rent in taper → 10% on the part above the tapered exemption");
 ok(near(monthlyRentTax(12_000, 5_654), 1_200, 0.01), "rent above 2× ceiling → 10% track");
 ok(near(monthlyRentTax(10_000, 5_654, 6_000), 400, 0.01), "₪90K rule: 10% of (rent − own rent paid)");
 ok(near(monthlyRentTax(10_000, 5_654, 9_000), 250, 0.01), "₪90K rule: deduction capped at ₪7,500 a month");
@@ -128,6 +128,15 @@ ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested,
   ok(near(paymentToIncome(inp, 9_500, loanPmt), 9_500 / (25_000 - loanPmt), 1e-9), "PTI: other loan reduces income, not added to payment");
   ok(near(paymentToIncome({ ...inp, ownRentPaid: 6_000 }, 9_500, loanPmt), 9_500 / (25_000 - loanPmt - 6_000), 1e-9), "PTI: rent paid elsewhere reduces disposable income");
   ok(paymentToIncome({ ...inp, monthlyIncome: 5_000, ownRentPaid: 6_000 }, 9_500, loanPmt) === 10, "PTI: no disposable income → clear fail");
+}
+
+// Living in the new apartment: rent saved in full, no vacancy, no rent tax
+{
+  const rentOut = simulate({ ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 5_000_000, rentalYield: 4 });
+  const liveIn = simulate({ ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 5_000_000, rentalYield: 4, liveInNew: true });
+  ok(liveIn.realEstate.livesInNew && liveIn.realEstate.totalRentTax === 0 && liveIn.realEstate.totalVacancyLoss === 0, "living in: no rent tax, no vacant months");
+  ok(liveIn.realEstate.initialMonthlyRentNet > rentOut.realEstate.initialMonthlyRentNet, "living in: saved rent is worth more than rent received after vacancy and tax");
+  ok(!simulate({ ...DEFAULT_INPUTS, apartmentType: "additional", liveInNew: true }).realEstate.livesInNew, "living in is not an option for an additional apartment");
 }
 
 // Loan to invest in the S&P

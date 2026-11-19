@@ -49,7 +49,8 @@ export const INSURANCE_MONTHLY = 150; // building + mortgage life insurance, ₪
 /** Rental income: monthly exemption ceiling (frozen 2024–2027), 10% track, marginal rate for the taper */
 export const RENT_EXEMPT_CEILING_MONTHLY = 5_654;
 export const RENT_FLAT_TAX_RATE = 0.1;
-export const MARGINAL_TAX_RATE = 0.31;
+/** Rent above the tapered exemption is taxed at 10% (Knesset Research Center example; confirmed by the user) */
+export const TAPER_REMAINDER_RATE = 0.1;
 /** s.122(f): sole-apartment owner living in a rental deducts rent paid, up to ₪90K a year, on the 10% track */
 export const OWN_RENT_DEDUCTION_CAP_MONTHLY = 90_000 / 12;
 
@@ -135,6 +136,12 @@ export interface SimInputs {
    * A sole-apartment owner may deduct it, up to ₪90K a year, on the 10% track (s.122(f)).
    */
   ownRentPaid: number;
+  /**
+   * Single / upgrader: the buyer lives in the new apartment instead of renting it out.
+   * The rent they would otherwise pay is saved (no vacancy, no rent tax); in the S&P
+   * track they live in a rental.
+   */
+  liveInNew: boolean;
   /** Optional bank-approval check: household's net monthly income */
   incomeCheck: boolean;
   monthlyIncome: number;
@@ -208,6 +215,7 @@ export const DEFAULT_INPUTS: SimInputs = {
   spLoanRate: 6.5,
   spLoanTerm: 10,
   ownRentPaid: 0,
+  liveInNew: false,
   incomeCheck: false,
   monthlyIncome: 25_000,
 };
@@ -230,6 +238,8 @@ export interface YearPoint {
 
 export interface RealEstateSummary {
   apartmentType: ApartmentType;
+  /** The buyer lives in the new apartment (rent saved instead of rent received) */
+  livesInNew: boolean;
   /** Own money at the start (cash + net proceeds from the old home) */
   startCapital: number;
   oldHomeNetProceeds: number;
@@ -340,7 +350,7 @@ function safeNum(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-const BOOL_KEYS: BoolKey[] = ["sellFirst", "autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "incomeCheck"];
+const BOOL_KEYS: BoolKey[] = ["liveInNew", "sellFirst", "autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "incomeCheck"];
 
 /** Coerce arbitrary (possibly URL-sourced) input into a valid SimInputs. */
 export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApartment", unknown>>): SimInputs {
@@ -416,7 +426,7 @@ export function spitzerPayment(principal: number, annualRatePct: number, years: 
 export function monthlyRentTax(rent: number, ceiling: number, ownRentDeduction = 0): number {
   if (!(rent > ceiling)) return 0;
   const exempt = Math.max(0, Math.min(ceiling, 2 * ceiling - rent));
-  const exemptionTrack = MARGINAL_TAX_RATE * (rent - exempt);
+  const exemptionTrack = TAPER_REMAINDER_RATE * (rent - exempt);
   const deduction = Math.min(Math.max(0, ownRentDeduction), OWN_RENT_DEDUCTION_CAP_MONTHLY);
   const flatTrack = RENT_FLAT_TAX_RATE * Math.max(0, rent - deduction);
   return Math.min(flatTrack, exemptionTrack);
@@ -482,6 +492,11 @@ export function oldHomeUsableAtPurchase(inputs: SimInputs): number {
   return Math.min(net, bridge);
 }
 
+/** Living in the new apartment is an option only when it's the buyer's sole apartment. */
+export function livesInNew(inputs: SimInputs): boolean {
+  return inputs.liveInNew && inputs.apartmentType !== "additional";
+}
+
 /** Cash available for the purchase: own money (usable on the day) plus the optional down-payment loan. */
 export function purchaseCash(inputs: SimInputs): number {
   return inputs.equity + oldHomeUsableAtPurchase(inputs) + (inputs.loanEnabled ? inputs.loanAmount : 0);
@@ -496,7 +511,7 @@ export function purchaseCash(inputs: SimInputs): number {
  */
 export function paymentToIncome(inputs: SimInputs, mortgagePayment: number, otherLoanPayment: number): number {
   const otherLoans = inputs.loanEnabled && inputs.loanTerm * 12 > 18 ? otherLoanPayment : 0;
-  const rentPaid = inputs.apartmentType === "additional" ? 0 : inputs.ownRentPaid;
+  const rentPaid = inputs.apartmentType === "additional" || livesInNew(inputs) ? 0 : inputs.ownRentPaid;
   const disposable = inputs.monthlyIncome - otherLoans - rentPaid;
   return disposable > 0 ? mortgagePayment / disposable : 10;
 }
@@ -696,11 +711,13 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
 
     // 3. Rent: grows yearly; one vacant month a year; tax; landlord costs
     const rentGross = Math.max(0, ((price * rentalYield) / 100 / 12) * Math.pow(1 + rentGrowth / 100, yearIdx));
-    const collected = rentGross * (1 - VACANCY_MONTHS_PER_YEAR / 12);
+    // Living in it: the saved rent counts in full, with no vacancy and no rent tax
+    const living = livesInNew(inputs);
+    const collected = living ? rentGross : rentGross * (1 - VACANCY_MONTHS_PER_YEAR / 12);
     const ceiling = RENT_EXEMPT_CEILING_MONTHLY * thresholdIndex(yearIdx + 1);
     // The rent-paid deduction is for a sole-apartment owner only (not an additional apartment)
     const ownRent = apartmentType === "additional" ? 0 : inputs.ownRentPaid;
-    const rentTax = monthlyRentTax(collected, ceiling, ownRent);
+    const rentTax = living ? 0 : monthlyRentTax(collected, ceiling, ownRent);
     const ownership = collected * MAINTENANCE_RATE + INSURANCE_MONTHLY * Math.pow(1 + inflation / 100, yearIdx);
     const rentNet = collected - rentTax - ownership;
     rentGrossTotal += rentGross;
@@ -760,6 +777,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const reNet = last.point.realEstate;
   const realEstate: RealEstateSummary = {
     apartmentType,
+    livesInNew: livesInNew(inputs),
     startCapital: equity,
     oldHomeNetProceeds: old.net,
     oldHomeUsableAtPurchase: oldHomeUsableAtPurchase(inputs),

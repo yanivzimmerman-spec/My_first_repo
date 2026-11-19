@@ -34,14 +34,15 @@ function expectedStart(inp: SimInputs): number {
 }
 
 /** Independent month-1 rent after vacancy, rent tax (cheaper track), 8% maintenance, ₪150 insurance. */
-function expectedNetRent(price: number, yieldPct: number, ownRent = 0): number {
+function expectedNetRent(price: number, yieldPct: number, ownRent = 0, living = false): number {
   const gross = (price * yieldPct) / 100 / 12;
+  if (living) return gross - 0.08 * gross - 150; // saved rent: no vacancy, no tax
   const collected = (gross * 11) / 12;
   let tax = 0;
   if (collected > RENT_CEILING) {
     const exempt = Math.max(0, Math.min(RENT_CEILING, 2 * RENT_CEILING - collected));
     const deduction = Math.min(ownRent, 7_500); // s.122(f): up to ₪90K a year
-    tax = Math.min(0.1 * Math.max(0, collected - deduction), 0.31 * (collected - exempt));
+    tax = Math.min(0.1 * Math.max(0, collected - deduction), 0.1 * (collected - exempt));
   }
   return collected - tax - 0.08 * collected - 150;
 }
@@ -147,7 +148,9 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   }
 
   // 4b. Month-1 cash flow, computed independently
-  const expNet = expectedNetRent(re.propertyPrice, inp.rentalYield, inp.apartmentType === "additional" ? 0 : inp.ownRentPaid);
+  const living = inp.liveInNew && inp.apartmentType !== "additional";
+  check(re.livesInNew === living, "living in only for a sole apartment", ctx);
+  const expNet = expectedNetRent(re.propertyPrice, inp.rentalYield, inp.apartmentType === "additional" ? 0 : inp.ownRentPaid, living);
   check(near(re.initialMonthlyRentNet, expNet, 0.01), "month-1 net rent (independent)", ctx);
   const expPmt = spitzerPayment(re.loanAmount, inp.mortgageRate, inp.mortgageTerm);
   const expLoanPmt = inp.loanEnabled ? spitzerPayment(inp.loanAmount, inp.loanRate, inp.loanTerm) : 0;
@@ -239,7 +242,8 @@ for (const apartmentType of TYPES)
             for (const equity of EQUITY)
               for (const years of YEARS)
                 for (const [, market] of Object.entries(MARKETS))
-                 for (const oldHome of apartmentType === "upgrader" ? OLD_HOMES : [{}]) {
+                 for (const oldHome of apartmentType === "upgrader" ? OLD_HOMES : [{}])
+                  for (const liveInNew of BOOLS) {
                   const inp: SimInputs = {
                     ...DEFAULT_INPUTS,
                     ...market,
@@ -254,6 +258,7 @@ for (const apartmentType of TYPES)
                     years,
                     mortgageTerm: years === 30 ? 20 : 25, // also cover "mortgage paid off before the end"
                     ...oldHome,
+                    liveInNew,
                   };
                   const r = simulate(inp);
                   checkScenario(r.inputs, r);

@@ -86,16 +86,24 @@ export default function Breakdown({ result }: { result: SimResult }) {
               } as Line,
             ]
           : []),
-        { label: "שכר דירה (ברוטו)", re: re.totalRentGross, sp: null },
-        { label: "חודשים פנויים", re: re.totalVacancyLoss, sp: null, negative: true, note: "חודש אחד בשנה" },
+        re.livesInNew
+          ? { label: "שכר דירה שנחסך", re: re.totalRentGross, sp: null, note: "גרים בדירה; במסלול ה-S&P משלמים שכירות" }
+          : { label: "שכר דירה (ברוטו)", re: re.totalRentGross, sp: null },
+        ...(re.livesInNew
+          ? []
+          : [{ label: "חודשים פנויים", re: re.totalVacancyLoss, sp: null, negative: true, note: "חודש אחד בשנה" } as Line]),
         { label: "תחזוקה וביטוחים", re: re.totalOwnershipCosts, sp: null, negative: true, note: "8% מהשכירות + ביטוח מבנה וחיים" },
-        {
-          label: "מס על שכירות",
-          re: re.totalRentTax,
-          sp: null,
-          negative: true,
-          note: "פטור עד ₪5,654 לחודש, מעל זה המסלול הזול מבין 10% והפטור החלקי",
-        },
+        ...(re.livesInNew
+          ? []
+          : [
+              {
+                label: "מס על שכירות",
+                re: re.totalRentTax,
+                sp: null,
+                negative: true,
+                note: "פטור עד ₪5,654 לחודש; מעל זה 10%",
+              } as Line,
+            ]),
         {
           label: "דליפת מס דיבידנדים",
           re: null,

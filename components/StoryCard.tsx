@@ -52,10 +52,20 @@ export default function StoryCard({ result }: { result: SimResult }) {
               {formatCompactILS(re.purchaseTax + re.closingCosts)}.
             </Step>
             <Step when="כל חודש (בשנה הראשונה)">
-              משלמים לבנק {formatILS(reMonthlyOut)}, ומהשכירות נשארים {formatILS(re.initialMonthlyRentNet)}.{" "}
+              {re.livesInNew ? (
+                <>
+                  גרים בדירה ומשלמים לבנק {formatILS(reMonthlyOut)}, אבל לא משלמים שכירות של{" "}
+                  {formatILS(re.initialMonthlyRentGross)}.{" "}
+                </>
+              ) : (
+                <>
+                  משלמים לבנק {formatILS(reMonthlyOut)}, ומהשכירות נשארים {formatILS(re.initialMonthlyRentNet)}.{" "}
+                </>
+              )}
               {re.initialMonthlyGap > 0.5 ? (
                 <>
-                  אתם מוסיפים <B>{formatILS(re.initialMonthlyGap)}</B> מהכיס.
+                  {re.livesInNew ? "מעבר לשכירות שנחסכה, אתם מוסיפים " : "אתם מוסיפים "}
+                  <B>{formatILS(re.initialMonthlyGap)}</B> מהכיס.
                 </>
               ) : (
                 <>
@@ -89,17 +99,24 @@ export default function StoryCard({ result }: { result: SimResult }) {
               גדולות.
             </Step>
             <Step when="כל חודש (בשנה הראשונה)">
+              {re.livesInNew && <>גרים בשכירות ומשלמים {formatILS(re.initialMonthlyRentGross)}. </>}
               {sp.loanPrincipal > 0 && <>מחזירים {formatILS(sp.loanPayment)} על ההלוואה. </>}
               {matching ? (
                 sp.initialDeposit > 0.5 ? (
                   <>
                     מפקידים <B>{formatILS(sp.initialDeposit)}</B>
-                    {sp.loanPrincipal > 0 ? " נוספים, כך שבסך הכול יוצא מהכיס אותו סכום כמו בדירה." : ", בדיוק הסכום שהייתם מוסיפים לדירה."}
+                    {sp.loanPrincipal > 0 || re.livesInNew
+                      ? " במדד, כך שבסך הכול יוצא מהכיס אותו סכום כמו בדירה."
+                      : ", בדיוק הסכום שהייתם מוסיפים לדירה."}
                   </>
                 ) : own > 0.5 ? (
                   <>זה אותו סכום שיוצא מהכיס במסלול הדירה.</>
                 ) : (
-                  <>לא מפקידים כלום, כי הדירה לא דורשת תוספת מהכיס.</>
+                  re.livesInNew ? (
+                    <>לא מפקידים: השכירות היא כל ההוצאה. במסלול הדירה אותו סכום הולך למשכנתא, לתחזוקה ולמדד.</>
+                  ) : (
+                    <>לא מפקידים כלום, כי הדירה לא דורשת תוספת מהכיס.</>
+                  )
                 )
               ) : (
                 <>לא מפקידים כלום. (ההשקעה החודשית כבויה.)</>
@@ -117,8 +134,9 @@ export default function StoryCard({ result }: { result: SimResult }) {
 
       {matching && own > 0.5 && (
         <p className="mt-5 border-t border-slate-100 pt-4 text-[13px] leading-relaxed text-slate-500">
-          בשני המסלולים יוצא מהכיס אותו סכום: {formatCompactILS(re.startCapital)} היום ועוד כ-{formatILS(own)} בחודש. כך
-          ההשוואה הוגנת.
+          בשני המסלולים יוצא מהכיס אותו סכום: {formatCompactILS(re.startCapital)} היום ועוד כ-
+          {formatILS(re.livesInNew ? own + re.initialMonthlyRentGross : own)} בחודש
+          {re.livesInNew ? " (בדירה: משכנתא, תחזוקה וביטוח; ב-S&P: שכירות והפקדה)" : ""}. כך ההשוואה הוגנת.
         </p>
       )}
     </section>

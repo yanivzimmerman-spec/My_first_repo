@@ -48,7 +48,9 @@ export function topReasons(r: SimResult): Reason[] {
       favors: "sp500",
       amount: re.totalVacancyLoss + re.totalOwnershipCosts + re.totalRentTax,
       text: (f) =>
-        `חודשים פנויים, תחזוקה, ביטוח ומס על השכירות הורידו ${f(re.totalVacancyLoss + re.totalOwnershipCosts + re.totalRentTax)} מהשכירות.`,
+        re.livesInNew
+          ? `תחזוקה וביטוח עלו ${f(re.totalOwnershipCosts)}.`
+          : `חודשים פנויים, תחזוקה, ביטוח ומס על השכירות הורידו ${f(re.totalVacancyLoss + re.totalOwnershipCosts + re.totalRentTax)} מהשכירות.`,
     },
   ];
 
