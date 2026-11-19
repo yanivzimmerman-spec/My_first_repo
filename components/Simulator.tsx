@@ -16,6 +16,7 @@ import ScenarioRange from "./ScenarioRange";
 import RisksCard from "./RisksCard";
 import RiskGauges from "./RiskGauges";
 import ComboView from "./ComboView";
+import SituationPicker from "./SituationPicker";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
@@ -46,7 +47,11 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export default function Simulator() {
+/**
+ * `variant="situations"` is a draft (preview build only): situation cards replace the example chips.
+ * The published site uses the default.
+ */
+export default function Simulator({ variant }: { variant?: "situations" } = {}) {
   const [inputs, setInputs] = useState<SimInputs>(DEFAULT_INPUTS);
   const [hydrated, setHydrated] = useState(false);
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
@@ -157,6 +162,9 @@ export default function Simulator() {
           רווחי הון.
         </p>
 
+        {variant === "situations" ? (
+          <SituationPicker inputs={result.inputs} set={set} />
+        ) : (
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <span className="text-[13px] text-slate-500">נסו תרחיש:</span>
           {PRESETS.map((p) => {
@@ -188,6 +196,7 @@ export default function Simulator() {
             </button>
           )}
         </div>
+        )}
       </header>
 
       {view === "combo" ? (

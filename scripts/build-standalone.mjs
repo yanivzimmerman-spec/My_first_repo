@@ -1,14 +1,18 @@
 // Builds the whole app into one self-contained HTML file: dist/index.html
+// `node scripts/build-standalone.mjs preview` builds the draft preview into dist/preview.html
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
+const preview = process.argv[2] === "preview";
+const entry = preview ? "standalone/preview-entry.tsx" : "standalone/entry.tsx";
+const out = preview ? "dist/preview.html" : "dist/index.html";
 mkdirSync("dist", { recursive: true });
 execFileSync("npx", ["@tailwindcss/cli", "-i", "standalone/styles.css", "-o", "dist/app.css", "--minify"], {
   stdio: "inherit",
 });
 await build({
-  entryPoints: ["standalone/entry.tsx"],
+  entryPoints: [entry],
   bundle: true,
   minify: true,
   format: "iife",
@@ -35,5 +39,5 @@ const html = `<title>נדל״ן מול סנופי</title>
 <div id="root" dir="rtl" lang="he"></div>
 <script>${js}</script>
 `;
-writeFileSync("dist/index.html", html);
-console.log(`dist/index.html — ${(html.length / 1024).toFixed(0)} KB`);
+writeFileSync(out, preview ? html.replace("<title>נדל״ן מול סנופי</title>", "<title>בחירת מצב (טיוטה)</title>") : html);
+console.log(`${out} — ${(html.length / 1024).toFixed(0)} KB`);

@@ -71,3 +71,34 @@ export const SCENARIO_DELTAS = {
   pessimistic: { appreciation: -1.5, rentGrowth: -1, spReturn: -2.5, fxDrift: -0.5 },
   optimistic: { appreciation: 1.5, rentGrowth: 1, spReturn: 2, fxDrift: 0.5 },
 } as const;
+
+/**
+ * Situation categories (draft, preview only): the main combinations of "do you own an apartment?"
+ * and "where will you live?". Picking one sets those choices and keeps the user's numbers.
+ */
+export interface Situation {
+  id: string;
+  title: string;
+  description: string;
+  icon: "home" | "key" | "swap" | "plus" | "move" | "two";
+  values: Pick<SimInputs, "apartmentType" | "liveInNew" | "liveElsewhere">;
+}
+
+export const SITUATIONS: Situation[] = [
+  { id: "firstHome", title: "דירה ראשונה למגורים", description: "אין לנו דירה, קונים כדי לגור בה", icon: "home", values: { apartmentType: "single", liveInNew: true, liveElsewhere: false } },
+  { id: "firstInvest", title: "דירה ראשונה להשקעה", description: "אין לנו דירה, קונים ומשכירים, וגרים בשכירות", icon: "key", values: { apartmentType: "single", liveInNew: false, liveElsewhere: false } },
+  { id: "upgrade", title: "משפרי דיור", description: "מוכרים את הדירה שלנו וקונים אחרת לגור בה", icon: "swap", values: { apartmentType: "upgrader", liveInNew: true, liveElsewhere: false } },
+  { id: "secondInvest", title: "דירה שנייה להשקעה", description: "נשארים בדירה שלנו וקונים עוד אחת להשכרה", icon: "plus", values: { apartmentType: "additional", liveInNew: false, liveElsewhere: false } },
+  { id: "moveRentOld", title: "עוברים ומשכירים את הישנה", description: "קונים דירה לגור בה ומשכירים את הדירה הקיימת", icon: "move", values: { apartmentType: "additional", liveInNew: true, liveElsewhere: false } },
+  { id: "twoRentals", title: "שתי דירות להשכרה", description: "גרים במקום אחר ומשכירים גם את הקיימת וגם את החדשה", icon: "two", values: { apartmentType: "additional", liveInNew: false, liveElsewhere: true } },
+];
+
+export function matchSituation(inputs: SimInputs): string | null {
+  const s = SITUATIONS.find(
+    (x) =>
+      x.values.apartmentType === inputs.apartmentType &&
+      x.values.liveInNew === inputs.liveInNew &&
+      (inputs.apartmentType !== "additional" || x.values.liveElsewhere === inputs.liveElsewhere),
+  );
+  return s ? s.id : null;
+}
