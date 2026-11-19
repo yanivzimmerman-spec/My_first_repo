@@ -100,29 +100,8 @@ export default function ControlPanel({ inputs, result, set }: Props) {
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
-      {/* ---------------- Basic ---------------- */}
-      <Group title="הנתונים שלכם">
-        <SliderInput
-          label={type === "upgrader" ? "כמה כסף יש לכם, בנוסף לדירה?" : "כמה כסף יש לכם?"}
-          kind="currency"
-          value={inputs.equity}
-          bound={{
-            ...BOUNDS.equity,
-            min: Math.max(0, MIN_START_CAPITAL - re.oldHomeUsableAtPurchase),
-          }}
-          onChange={(v) => set("equity", v)}
-          hint={type === "upgrader" ? "מזומן או חסכונות. הכסף ממכירת הדירה נוסף בהמשך" : "ההון העצמי שאתם יכולים להשקיע היום"}
-        />
-        <SliderInput
-          label="לכמה שנים?"
-          kind="years"
-          value={inputs.years}
-          bound={BOUNDS.years}
-          onChange={(v) => set("years", Math.round(v))}
-        />
-      </Group>
-
-      <Group title="הדירה" color={RE}>
+      {/* ---------------- 1. Situation (everything below depends on it) ---------------- */}
+      <Group title="המצב שלכם">
         <div>
           <p className="mb-2 text-[15px] text-slate-700">יש לכם כבר דירה?</p>
           <Segmented
@@ -137,52 +116,48 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             ]}
           />
           <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{TYPE_TEXT[type]}</p>
-          {type === "additional" && (
-            <div className="mt-4">
-              <p className="mb-2 text-[15px] text-slate-700">איפה תגורו?</p>
-              <Segmented
-                ariaLabel="איפה תגורו"
-                accent={RE}
-                value={inputs.liveElsewhere ? "elsewhere" : inputs.liveInNew ? "moveIn" : "stay"}
-                onChange={(v) => {
-                  set("liveElsewhere", v === "elsewhere");
-                  set("liveInNew", v === "moveIn");
-                }}
-                options={[
-                  { value: "stay", label: "בדירה הישנה" },
-                  { value: "moveIn", label: "בדירה החדשה" },
-                  { value: "elsewhere", label: "במקום אחר" },
-                ]}
-              />
-              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
-                {inputs.liveElsewhere
-                  ? "גרים במקום אחר ומשכירים את שתי הדירות. הדירה הישנה מושכרת גם במסלול ה-S&P, אבל תקרת הפטור על שכירות משותפת לשתיהן, ולכן הדירה החדשה מוסיפה מס."
-                  : inputs.liveInNew
-                    ? "עוברים לדירה החדשה ומשכירים את הישנה. שכר הדירה מגיע מהדירה הישנה. במסלול ה-S&P ממשיכים לגור בדירה הישנה."
-                    : "ממשיכים לגור בדירה הקיימת ומשכירים את החדשה."}
-              </p>
-            </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-[15px] text-slate-700">איפה תגורו?</p>
+          {type === "additional" ? (
+            <Segmented
+              ariaLabel="איפה תגורו"
+              accent={RE}
+              value={inputs.liveElsewhere ? "elsewhere" : inputs.liveInNew ? "new" : "old"}
+              onChange={(v) => {
+                set("liveElsewhere", v === "elsewhere");
+                set("liveInNew", v === "new");
+              }}
+              options={[
+                { value: "old", label: "בדירה הישנה" },
+                { value: "new", label: "בדירה החדשה" },
+                { value: "elsewhere", label: "במקום אחר" },
+              ]}
+            />
+          ) : (
+            <Segmented
+              ariaLabel="איפה תגורו"
+              accent={RE}
+              value={inputs.liveInNew ? "new" : "elsewhere"}
+              onChange={(v) => set("liveInNew", v === "new")}
+              options={[
+                { value: "new", label: "בדירה החדשה" },
+                { value: "elsewhere", label: "במקום אחר" },
+              ]}
+            />
           )}
-          {type !== "additional" && (
-            <div className="mt-4">
-              <p className="mb-2 text-[15px] text-slate-700">מה תעשו בדירה החדשה?</p>
-              <Segmented
-                ariaLabel="מגורים או השכרה"
-                accent={RE}
-                value={inputs.liveInNew ? "live" : "rent"}
-                onChange={(v) => set("liveInNew", v === "live")}
-                options={[
-                  { value: "rent", label: "משכירים" },
-                  { value: "live", label: "גרים בה" },
-                ]}
-              />
-              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
-                {inputs.liveInNew
-                  ? "במקום לקבל שכר דירה, חוסכים את השכירות שהייתם משלמים. במסלול ה-S&P גרים בשכירות."
-                  : "משכירים את הדירה ומקבלים שכר דירה. אתם גרים במקום אחר."}
-              </p>
-            </div>
-          )}
+          <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+            {type === "additional"
+              ? inputs.liveElsewhere
+                ? "משכירים את שתי הדירות. הדירה הישנה מושכרת גם במסלול ה-S&P, אבל תקרת הפטור על שכירות משותפת לשתיהן, ולכן הדירה החדשה מוסיפה מס."
+                : inputs.liveInNew
+                  ? "עוברים לדירה החדשה ומשכירים את הישנה. במסלול ה-S&P ממשיכים לגור בדירה הישנה."
+                  : "ממשיכים לגור בדירה הישנה ומשכירים את החדשה."
+              : inputs.liveInNew
+                ? "גרים בדירה החדשה: במקום לקבל שכר דירה, חוסכים את השכירות. במסלול ה-S&P גרים בשכירות."
+                : "משכירים את הדירה החדשה ומקבלים שכר דירה. אתם גרים במקום אחר בשני המסלולים."}
+          </p>
         </div>
 
         {(re.rentsOutOld || re.rentsOutBoth) && (
@@ -245,9 +220,8 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             </div>
             <p className="text-[13px] leading-relaxed text-slate-600">
               אחרי עמלות מכירה של {formatILS(re.oldHomeSellingCosts)} וסגירת המשכנתא נשארים לכם{" "}
-              <span className="font-semibold text-slate-900">{formatILS(re.oldHomeNetProceeds)}</span>. יחד עם המזומן זה{" "}
-              <span className="font-semibold text-slate-900">{formatILS(re.startCapital)}</span>, ואותו סכום מושקע גם במסלול
-              ה-S&P.
+              <span className="font-semibold text-slate-900">{formatILS(re.oldHomeNetProceeds)}</span>. הכסף הזה נכנס לשני
+              המסלולים.
             </p>
             {re.oldHomeAboveCeiling && (
               <p className="flex gap-2 rounded-lg bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-900">
@@ -258,6 +232,36 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           </div>
         )}
 
+      </Group>
+
+      {/* ---------------- 2. Money and time ---------------- */}
+      <Group title="הכסף והזמן">
+        <SliderInput
+          label={type === "upgrader" ? "כמה כסף יש לכם, בנוסף לדירה?" : "כמה כסף יש לכם?"}
+          kind="currency"
+          value={inputs.equity}
+          bound={{
+            ...BOUNDS.equity,
+            min: Math.max(0, MIN_START_CAPITAL - re.oldHomeUsableAtPurchase),
+          }}
+          onChange={(v) => set("equity", v)}
+          hint={
+            type === "upgrader"
+              ? `מזומן או חסכונות. יחד עם הכסף ממכירת הדירה: ${formatILS(re.startCapital)}`
+              : "ההון העצמי שאתם יכולים להשקיע היום"
+          }
+        />
+        <SliderInput
+          label="לכמה שנים?"
+          kind="years"
+          value={inputs.years}
+          bound={BOUNDS.years}
+          onChange={(v) => set("years", Math.round(v))}
+        />
+      </Group>
+
+      {/* ---------------- 3. The new apartment ---------------- */}
+      <Group title="הדירה החדשה" color={RE}>
         <div>
           <SliderInput
             label="מחיר הדירה"
@@ -276,10 +280,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           />
           <div className="mt-3 rounded-lg bg-slate-50 p-3 text-[13px] leading-relaxed text-slate-600">
             {re.priceCapped && (
-              <p className="mb-1 flex gap-1.5 font-medium text-amber-800">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-                המחיר שבחרתם גבוה ממה שהבנק יממן, לכן החישוב נעשה לפי המקסימום.
-              </p>
+              <p className="mb-1 font-medium text-slate-800">המחיר הותאם למקסימום שהבנק יממן במצב הזה.</p>
             )}
             <p>
               עם {formatILS(re.startCapital)}
@@ -294,6 +295,16 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             <Switch label="מחיר מקסימלי אוטומטי" checked={inputs.autoPrice} onChange={(v) => set("autoPrice", v)} accent={RE} />
           </label>
         </div>
+
+        <SliderInput
+          label="ריבית משכנתא"
+          kind="percent"
+          value={inputs.mortgageRate}
+          bound={BOUNDS.mortgageRate}
+          accent={RE}
+          onChange={(v) => set("mortgageRate", v)}
+          hint="ממוצע לכל המסלולים. ב-2026: קבועה לא צמודה כ-4.6%, משתנה כ-4.4%. לפחות שליש מהמשכנתא חייב להיות בריבית קבועה."
+        />
 
         <SliderInput
           label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : re.rentsOutOld ? "שכר דירה על הדירה הישנה" : re.rentsOutBoth ? "שכר דירה על הדירה החדשה" : "שכר דירה חודשי"}
@@ -493,21 +504,12 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         >
           <span>
             הגדרות מתקדמות
-            <span className="mr-2 font-normal text-slate-400">ריבית, עמלות, מיסוי ואינפלציה</span>
+            <span className="mr-2 font-normal text-slate-400">תקופת משכנתא, עמלות, מיסוי ואינפלציה</span>
           </span>
           <ChevronDown size={16} className={`transition-transform ${advanced ? "rotate-180" : ""}`} />
         </button>
         {advanced && (
           <div className="space-y-6 px-5 pb-6 sm:px-6">
-            <SliderInput
-              label="ריבית משכנתא"
-              kind="percent"
-              value={inputs.mortgageRate}
-              bound={BOUNDS.mortgageRate}
-              accent={RE}
-              onChange={(v) => set("mortgageRate", v)}
-              hint="ממוצע לכל המסלולים. ב-2026: קבועה לא צמודה כ-4.6%, משתנה כ-4.4%. לפחות שליש מהמשכנתא חייב להיות בריבית קבועה."
-            />
             <SliderInput
               label="תקופת המשכנתא"
               kind="years"

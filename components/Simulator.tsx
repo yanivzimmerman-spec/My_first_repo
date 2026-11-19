@@ -76,7 +76,7 @@ export default function Simulator() {
     const url = `${window.location.origin}${window.location.pathname}${q ? `?${q}` : ""}`;
     const text = [
       `נדל״ן מול סנופי — ${verdictText(result)}`,
-      `🏠 דירה להשקעה: ${formatILS(result.realEstate.netWorth)} נטו`,
+      `🏠 קונים דירה: ${formatILS(result.realEstate.netWorth)} נטו`,
       `📈 S&P 500: ${formatILS(result.sp500.netWorth)} נטו`,
       `(הון עצמי ${formatILS(result.realEstate.startCapital)}${result.realEstate.oldHomeNetProceeds > 0 ? " כולל מכירת הדירה הקיימת" : ""}, ${{ single: "דירה יחידה", upgrader: "משפרי דיור", additional: "דירה נוספת" }[inputs.apartmentType]}${inputs.loanEnabled ? `, הלוואה לדירה ${formatILS(inputs.loanAmount)}` : ""}${inputs.spLoanEnabled ? `, הלוואה להשקעה ${formatILS(inputs.spLoanAmount)}` : ""}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
       ...(STANDALONE ? [] : [url]),
@@ -117,7 +117,7 @@ export default function Simulator() {
           </button>
         </div>
         <h1 className="mt-1 max-w-[22ch] text-[28px] font-bold leading-tight text-slate-900 [text-wrap:balance] sm:text-4xl">
-          מה משתלם יותר: <span className="whitespace-nowrap text-re">דירה להשקעה</span> או <span className="whitespace-nowrap text-sp-ink">S&P 500</span>?
+          מה משתלם יותר: <span className="whitespace-nowrap text-re">לקנות דירה</span> או <span className="whitespace-nowrap text-sp-ink">להשקיע ב-S&P 500</span>?
         </h1>
         <p className="mt-3 max-w-[60ch] text-[15px] leading-relaxed text-slate-600 sm:text-base">
           הזיזו את הנתונים וקבלו תשובה מיידית: כמה כסף יישאר לכם בכל מסלול, אחרי מס רכישה, מס שבח, מס על השכירות ומס

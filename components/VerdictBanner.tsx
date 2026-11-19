@@ -93,7 +93,7 @@ export default function VerdictBanner({ result, breakEven }: { result: SimResult
 
       <div className="mt-6 space-y-5">
         <Bar
-          label="דירה להשקעה"
+          label="קונים דירה"
           value={r.realEstate.netWorth}
           ret={r.realEstate.totalReturnPct}
           max={max}

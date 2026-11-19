@@ -46,7 +46,7 @@ function ChartTooltip({ active, payload, crossYears }: TipProps) {
         )}
       </div>
       <div className="space-y-1.5">
-        <Row color={RE} label="דירה להשקעה" value={p.realEstate} />
+        <Row color={RE} label="קונים דירה" value={p.realEstate} />
         <Row color={SP} label="S&P 500" value={p.sp500} />
       </div>
       <div className="mt-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
@@ -120,7 +120,7 @@ export default function GrowthChart({ result, dark = false }: { result: SimResul
       <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
         <span className="flex items-center gap-1.5 text-slate-600">
           <span className="h-0.5 w-4 rounded" style={{ background: RE }} />
-          דירה להשקעה <span className="font-semibold text-slate-900">{formatCompactILS(last.realEstate)}</span>
+          קונים דירה <span className="font-semibold text-slate-900">{formatCompactILS(last.realEstate)}</span>
         </span>
         <span className="flex items-center gap-1.5 text-slate-600">
           <span className="h-0.5 w-4 rounded" style={{ background: SP }} />
@@ -199,7 +199,7 @@ export default function GrowthChart({ result, dark = false }: { result: SimResul
               <Area
                 type="monotone"
                 dataKey="realEstate"
-                name="דירה להשקעה"
+                name="קונים דירה"
                 stroke={pal.re}
                 strokeWidth={2}
                 fill="url(#gRE)"

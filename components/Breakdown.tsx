@@ -196,7 +196,7 @@ export default function Breakdown({ result }: { result: SimResult }) {
             <thead>
               <tr className="text-xs text-slate-500">
                 <th className="w-[44%] px-2 py-2 text-right font-medium"></th>
-                <th className="px-2 py-2 text-right font-semibold text-re-ink">דירה להשקעה</th>
+                <th className="px-2 py-2 text-right font-semibold text-re-ink">קונים דירה</th>
                 <th className="px-2 py-2 text-right font-semibold text-sp-ink">S&P 500</th>
               </tr>
             </thead>
