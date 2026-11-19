@@ -57,6 +57,7 @@ The full source review is in a local research report; each rule below was checke
   - *Owner costs*: renovation reserve 0.5% of value a year, arnona and house committee in the vacant month (₪900), optional management fee, building insurance ₪50/month plus life insurance ₪100 per ₪1M of balance.
   - *Sale*: optional months on the market, building-age drag, notional depreciation (additional apartment), urban renewal (value jump, 25% levy, 3 years without income).
   - *Own rent rule of thumb*: a sole-apartment owner renting it out is assumed to pay about the same rent where they live, deducted on the 10% track (up to ₪90K a year).
+  - *Risk gauge per track*: own money a bad year could wipe out = leverage (exposure ÷ own money) × a bad-year drop (single apartment −15%, S&P −35%), shown as five levels, plus extra steps for a borrowed down payment, a mostly variable/CPI-linked mortgage, payment-to-income above 40% or a loan to invest; with plain-language factors.
   - *Outputs*: break-even rent next to break-even price growth, pessimistic/your/optimistic range, today's-money values, a "how conservative are you?" meter (sets price growth, rent growth, S&P return and dollar drift together), source links in the tax explanations, a "what the numbers don't show" card, and a mixed-strategy page (#combo).
 - **Not modelled**: US estate tax on US-domiciled ETFs, tax-deferred savings wrappers (קופת גמל להשקעה), the old home's מס שבח above the exemption ceiling, bridge-loan interest, and the old mortgage in the payment-to-income check.
 

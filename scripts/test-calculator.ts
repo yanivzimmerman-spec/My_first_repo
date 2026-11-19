@@ -206,6 +206,19 @@ ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested,
   } else ok(false, "break-even rent exists for defaults");
 }
 
+// Risk gauges: leverage × bad-year drop, plus factors
+{
+  const { trackRisks } = await import("../lib/risk.ts");
+  const d = trackRisks(simulate(DEFAULT_INPUTS));
+  ok(near(d.realEstate.leverage, 2_000_000 / 600_000, 1e-9) && near(d.realEstate.badYearLossPct, (2_000_000 / 600_000) * 15, 1e-9), "apartment risk: leverage 3.3 × 15% bad year = 50%");
+  ok(d.sp500.leverage === 1 && near(d.sp500.badYearLossPct, 35, 1e-9), "S&P without a loan: 35% in a bad year");
+  const lev = trackRisks(simulate({ ...DEFAULT_INPUTS, spLoanEnabled: true, spLoanAmount: 600_000 }));
+  ok(lev.sp500.level > d.sp500.level, "a loan to invest raises the S&P risk level");
+  const cheap = trackRisks(simulate({ ...DEFAULT_INPUTS, equity: 3_000_000, propertyPrice: 1_000_000 }));
+  ok(cheap.realEstate.level < d.realEstate.level, "less leverage, lower apartment risk");
+  ok([d.realEstate.level, d.sp500.level, lev.sp500.level, cheap.realEstate.level].every((l) => l >= 1 && l <= 5), "levels stay within 1–5");
+}
+
 // Loan to invest in the S&P
 const spl = simulate({ ...DEFAULT_INPUTS, spLoanEnabled: true, spLoanAmount: 300_000 });
 ok(near(spl.points[0].sp500, DEFAULT_INPUTS.equity, 0.01), "S&P loan: year 0 net worth = own equity (loan offsets)");

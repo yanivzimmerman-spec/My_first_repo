@@ -14,6 +14,7 @@ import Breakdown from "./Breakdown";
 import StoryCard from "./StoryCard";
 import ScenarioRange from "./ScenarioRange";
 import RisksCard from "./RisksCard";
+import RiskGauges from "./RiskGauges";
 import ComboView from "./ComboView";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
@@ -212,20 +213,24 @@ export default function Simulator() {
         Layout: phone = answer → inputs → chart → details (one column).
         Desktop (RTL) = inputs in a sticky right column, results on the left.
       */}
-      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_auto_1fr] lg:items-start lg:gap-8">
+      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_auto_auto_1fr] lg:items-start lg:gap-8">
         <div className="min-w-0 lg:col-start-2 lg:row-start-1">
           <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenRentResult} />
         </div>
 
         <aside
           aria-label="הנתונים שלכם"
-          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-5 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
+          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-6 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
         >
           <ControlPanel inputs={result.inputs} result={result} set={set} />
         </aside>
 
         <div className="min-w-0 lg:col-start-2">
           <ScenarioRange pess={scenarios.pess} base={result} opt={scenarios.opt} />
+        </div>
+
+        <div className="min-w-0 lg:col-start-2">
+          <RiskGauges result={result} />
         </div>
 
         <div className="min-w-0 lg:col-start-2">

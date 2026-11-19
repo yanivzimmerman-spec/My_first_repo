@@ -36,19 +36,10 @@ export const PRESETS: Preset[] = [
     inputs: { ...DEFAULT_INPUTS, equity: 1_000_000, years: 15, propertyPrice: 1_600_000, apartmentType: "additional" },
   },
   {
-    id: "conservative",
-    label: "שוק קשה",
-    description: "ריבית 5.8%, עליית ערך 3%, S&P 7%",
-    inputs: {
-      ...DEFAULT_INPUTS,
-      autoRate: false,
-      mortgageRate: 5.8,
-      rentalYield: 2.8,
-      appreciation: 3,
-      rentGrowth: 2.5,
-      spReturn: 7,
-      inflation: 3,
-    },
+    id: "home",
+    label: "קונים לגור",
+    description: "דירה ראשונה לגור בה, ₪600K הון עצמי, 25 שנה",
+    inputs: { ...DEFAULT_INPUTS, equity: 600_000, years: 25, propertyPrice: 2_000_000, apartmentType: "single", liveInNew: true },
   },
 ];
 
