@@ -205,5 +205,14 @@ ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0,
   ok(buildReport([]).visitors === 0, "empty report");
 }
 
+// No sensitive data in the usage counts
+{
+  const { applyEvent } = await import("../lib/track.ts");
+  const keys = Object.keys(applyEvent({ first: "2026-01-01", last: "2026-01-01", visits: 1, cards: {}, guideCard: 0, guideLink: 0, maxStep: 0, steps: {}, promptCopy: 0, planCopy: 0, planLink: 0, toSimulator: 0, share: 0, combo: 0 }, { type: "promptCopy" }, new Set()));
+  ok(keys.every((k) => ["first", "last", "visits", "cards", "guideCard", "guideLink", "maxStep", "steps", "promptCopy", "planCopy", "planLink", "toSimulator", "share", "combo"].includes(k)), "usage record holds counters and dates only: no amounts, answers or names");
+  const src = (await import("node:fs")).readFileSync(new URL("../lib/track.ts", import.meta.url), "utf8");
+  ok(!/profile|answers|equity|income|cash|note/.test(src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "").replace(/PRIVACY_NOTE[\s\S]*?;/, "")), "the tracker never touches financial data or answers");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll planner tests passed");

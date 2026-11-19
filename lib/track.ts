@@ -48,6 +48,13 @@ const empty = (now: string): VisitorSummary => ({
   combo: 0,
 });
 
+/** Shown on the site, next to the disclaimer. */
+export const PRIVACY_NOTE =
+  "פרטיות: האתר לא אוסף מידע רגיש. הסכומים והתשובות שאתם מזינים נשארים אצלכם בדפדפן ולא נשמרים אצלנו. אנחנו סופרים רק שימוש אנונימי, כמו על אילו כפתורים לוחצים ועד איזה שלב מגיעים, בלי סכומים, בלי תשובות ובלי שמות.";
+
+/** Day only (YYYY-MM-DD): no exact times are kept. */
+const today = () => new Date().toISOString().slice(0, 10);
+
 /** Pure: apply one event to a summary (tested). Steps count once per visit. */
 export function applyEvent(s: VisitorSummary, e: TrackEvent, seenSteps: Set<number>): VisitorSummary {
   const next: VisitorSummary = { ...s, cards: { ...s.cards }, steps: { ...s.steps } };
@@ -102,7 +109,7 @@ function init(): Promise<DocRef | null> {
     const id = await user.id();
     if (!id) return null;
     const ref = db.doc(`events/${id}`);
-    const now = new Date().toISOString();
+    const now = today();
     try {
       const snap = await ref.get();
       const prev = snap.exists ? (snap.data() as Partial<VisitorSummary>) : null;
@@ -146,7 +153,7 @@ export function track(e: TrackEvent) {
   if (disabled) return;
   void init().then((ref) => {
     if (!ref || !summary) return;
-    summary = applyEvent({ ...summary, last: new Date().toISOString() }, e, seenSteps);
+    summary = applyEvent({ ...summary, last: today() }, e, seenSteps);
     dirty = true;
     schedule();
   });

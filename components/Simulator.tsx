@@ -19,7 +19,7 @@ import ComboView from "./ComboView";
 import SituationPicker from "./SituationPicker";
 import Planner from "./plan/Planner";
 import StatsView from "./StatsView";
-import { track, startTracking } from "@/lib/track";
+import { track, startTracking, PRIVACY_NOTE } from "@/lib/track";
 import { profileFromInputs, encodePlan, decodePlan, type Profile, type PlanState } from "@/lib/plan";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
@@ -314,6 +314,7 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
             זוהי סימולציה לצורכי המחשה בלבד, המבוססת על הנחות קבועות ומפושטות (תשואות, ריביות ואינפלציה קבועות לאורך כל
             התקופה). אין לראות בה ייעוץ השקעות, ייעוץ מס או המלצה לפעולה. תשואות עבר אינן מבטיחות תשואות עתידיות. מדרגות המס
             הן הערכה ועשויות להשתנות.
+            {withGuide && <> {PRIVACY_NOTE}</>}
           </p>
         </div>
       </div>

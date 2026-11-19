@@ -73,7 +73,7 @@ export default function StatsView() {
         <p className="text-[13px] font-semibold text-slate-500">לנו בלבד</p>
         <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-[28px]">מה עושים בגרסת האלפא</h1>
         <p className="mt-2 max-w-[65ch] text-[14px] leading-relaxed text-slate-600">
-          ספירה אנונימית: לחיצות ושלבים בלבד, בלי סכומים, בלי תשובות ובלי שמות. נספרים רק מבקרים מחוברים שיש להם הרשאת כתיבה
+          לא נאסף מידע רגיש. ספירה אנונימית: לחיצות ושלבים בלבד, ותאריך בלי שעה. בלי סכומים, בלי תשובות ובלי שמות. נספרים רק מבקרים מחוברים שיש להם הרשאת כתיבה
           (חברי הארגון או מי ששותף כ״תורם״). מבקרים מבחוץ עם קישור לצפייה בלבד לא נספרים.
         </p>
       </header>
@@ -143,7 +143,7 @@ function Stats({ r }: { r: Report }) {
         <Bar label="שיתפו את התוצאה" n={r.sharers} of={r.visitors} />
       </Card>
       {r.lastSeen && (
-        <p className="text-[12px] text-slate-500">ביקור אחרון: {new Date(r.lastSeen).toLocaleString("he-IL")}. הנתונים נטענים מחדש בכל כניסה לדף.</p>
+        <p className="text-[12px] text-slate-500">ביקור אחרון: {r.lastSeen}. הנתונים נטענים מחדש בכל כניסה לדף.</p>
       )}
     </>
   );

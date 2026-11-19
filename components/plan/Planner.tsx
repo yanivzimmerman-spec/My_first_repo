@@ -40,7 +40,7 @@ import SliderInput from "../SliderInput";
 import { Switch, Segmented } from "../Toggle";
 import VerdictBanner from "../VerdictBanner";
 import RiskGauges from "../RiskGauges";
-import { track } from "@/lib/track";
+import { track, PRIVACY_NOTE } from "@/lib/track";
 import ComboView from "../ComboView";
 import { comboCurve, type ComboPoint } from "@/lib/combo";
 
@@ -423,6 +423,7 @@ export default function Planner({
         זה לא ייעוץ השקעות. הכלי מחשב מה קורה לפי ההנחות שבחרתם ולפי כללי המס והבנקאות בישראל, בפישוט. לפני החלטה כדאי
         לבדוק עם יועץ השקעות או מתכנן פיננסי בעל רישיון.
       </p>
+      <p className="mt-2 text-[12px] leading-relaxed text-slate-500">{PRIVACY_NOTE}</p>
     </div>
   );
 }
