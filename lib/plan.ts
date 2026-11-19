@@ -103,9 +103,14 @@ const KEPT_LOAN_YEARS = 5;
 
 export interface Basics {
   monthlySaving: number;
+  /** Cushion target, and the part the money on hand covers (priority 1) */
+  cushionTarget: number;
   cushion: number;
+  /** Big expense set aside from the money on hand (priority 2) */
   bigExpense: number;
-  /** Expensive debt repaid first; 0 when the debt is cheap and kept */
+  /** Still missing for the cushion and the big expense; filled from monthly saving */
+  setAsideGap: number;
+  /** Expensive debt repaid from what's left (priority 3); the rest stays as a loan */
   debtPayoff: number;
   debtKept: number;
   /** Tax on the gain when the investments are sold to free the money */
@@ -121,14 +126,21 @@ export interface Basics {
 
 export function basics(p: Profile): Basics {
   const monthlySaving = p.income - p.expenses;
-  const cushion = Math.max(0, p.cushionMonths * p.expenses);
+  const cushionTarget = Math.max(0, p.cushionMonths * p.expenses);
   const expensive = p.debt > 0 && p.debtRate >= EXPENSIVE_DEBT_RATE;
-  const debtPayoff = expensive ? p.debt : 0;
-  const debtKept = expensive ? 0 : p.debt;
-  const saleTax = p.investments > 0 ? CAPITAL_GAINS_TAX * Math.min(p.investmentsGain, p.investments) : 0;
   const hishtalmutUsed = p.useHishtalmut ? p.hishtalmut : 0;
-  const total = p.cash + p.investments + hishtalmutUsed;
-  const available = Math.max(0, total - cushion - p.bigExpense - debtPayoff - saleTax);
+  // Selling the portfolio is assumed whenever its money is needed; the tax comes off the top
+  const saleTax = p.investments > 0 ? CAPITAL_GAINS_TAX * Math.min(p.investmentsGain, p.investments) : 0;
+  let left = Math.max(0, p.cash + p.investments + hishtalmutUsed - saleTax);
+  // Money on hand goes in priority order: cushion, planned expense, expensive debt
+  const cushion = Math.min(cushionTarget, left);
+  left -= cushion;
+  const bigExpense = Math.min(p.bigExpense, left);
+  left -= bigExpense;
+  const debtPayoff = expensive ? Math.min(p.debt, left) : 0;
+  left -= debtPayoff;
+  const debtKept = p.debt - debtPayoff;
+  const available = left;
 
   const keepsHome = p.home === "own" && p.homePlan === "invest";
   const mortgagePayment = keepsHome
@@ -140,8 +152,10 @@ export function basics(p: Profile): Basics {
   const oldHomeEquity = p.home === "own" && p.homePlan === "live" ? Math.max(0, p.homeValue - p.homeMortgage) : 0;
   return {
     monthlySaving,
+    cushionTarget,
     cushion,
-    bigExpense: p.bigExpense,
+    bigExpense,
+    setAsideGap: cushionTarget - cushion + (p.bigExpense - bigExpense),
     debtPayoff,
     debtKept,
     saleTax,
@@ -324,7 +338,7 @@ export function advisorPrompt(p: Profile, b: Basics, decision: PromptDecision | 
 
   const calc: string[] = [];
   const setAside = [
-    `כרית ביטחון ${ils(b.cushion)}`,
+    `כרית ביטחון ${ils(b.cushion)}${b.cushion < b.cushionTarget ? ` (מתוך ${ils(b.cushionTarget)} שאני רוצה)` : ""}`,
     ...(b.bigExpense > 0 ? [`הוצאה צפויה ${ils(b.bigExpense)}`] : []),
     ...(b.debtPayoff > 0 ? [`החזר ההלוואה היקרה ${ils(b.debtPayoff)}`] : []),
     ...(b.saleTax > 0 ? [`מס על מכירת התיק ${ils(b.saleTax)}`] : []),

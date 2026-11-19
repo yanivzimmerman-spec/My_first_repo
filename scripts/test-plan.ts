@@ -25,6 +25,13 @@ ok(near(basics(P({ debtRate: 4 })).existingPayments, spitzerPayment(40_000, 4, 5
 ok(basics(P({ useHishtalmut: true })).available === 553_000, "keren hishtalmut is added only when chosen");
 ok(basics(P({ bigExpense: 100_000 })).available === 333_000, "money for a big expense is set aside");
 ok(basics(P({ cash: 50_000, investments: 0, investmentsGain: 0 })).available === 0, "never negative");
+{
+  const b = basics(P({ cash: 100_000, investments: 0, investmentsGain: 0 }));
+  ok(b.cushion === 100_000 && b.setAsideGap === 2_000, "100K on hand: all of it to the cushion, 2K still missing");
+  ok(b.debtPayoff === 0 && b.debtKept === 40_000 && b.existingPayments > 0, "nothing left to repay the loan, so it stays and its payment counts");
+  const c = basics(P({ cash: 120_000, investments: 0, investmentsGain: 0 }));
+  ok(c.debtPayoff === 18_000 && c.debtKept === 22_000 && c.available === 0, "after the cushion, the rest goes to the expensive loan");
+}
 ok(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0, debt: 0 })).shortfall, "48K left → not enough for an apartment yet");
 ok(basics(P({ cash: 0, investments: 0, investmentsGain: 0, debt: 0, home: "own", homePlan: "live" })).shortfall === false, "upgraders can use the old home's equity");
 ok(basics(P({ investmentsGain: 900_000 })).saleTax === 100_000, "gain can't exceed the portfolio");
@@ -98,6 +105,45 @@ ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0,
   ok(answered.includes("צפויה ירושה"), "free note included");
   const short = P({ cash: 150_000, investments: 0, investmentsGain: 0, debt: 0 });
   ok(advisorPrompt(short, basics(short), null, {}).includes("עוד לא מספיק להון עצמי"), "no decision → says there isn't enough for an apartment yet");
+}
+
+// Fuzz: random households through the whole flow
+{
+  const { PROFILE_BOUNDS } = await import("../lib/plan.ts");
+  let bad = 0;
+  const rnd = (b: { min: number; max: number; step: number }) => {
+    const m = Math.random();
+    const v = m < 0.1 ? b.min : m < 0.2 ? b.max : b.min + Math.random() * (b.max - b.min);
+    return Math.round(v / b.step) * b.step;
+  };
+  for (let i = 0; i < 400; i++) {
+    const p: Profile = {
+      ...DEFAULT_PROFILE,
+      cash: rnd(PROFILE_BOUNDS.cash), investments: rnd(PROFILE_BOUNDS.investments), hishtalmut: rnd(PROFILE_BOUNDS.hishtalmut),
+      homeValue: rnd(PROFILE_BOUNDS.homeValue), homeMortgage: rnd(PROFILE_BOUNDS.homeMortgage), debt: rnd(PROFILE_BOUNDS.debt),
+      debtRate: rnd(PROFILE_BOUNDS.debtRate), income: rnd(PROFILE_BOUNDS.income), expenses: rnd(PROFILE_BOUNDS.expenses),
+      years: rnd(PROFILE_BOUNDS.years), bigExpense: rnd(PROFILE_BOUNDS.bigExpense), cushionMonths: rnd(PROFILE_BOUNDS.cushionMonths),
+      home: Math.random() < 0.5 ? "none" : "own", homePlan: Math.random() < 0.5 ? "live" : "invest",
+      useHishtalmut: Math.random() < 0.5, risk: Math.floor(Math.random() * 5),
+    };
+    p.investmentsGain = Math.round(Math.random() * p.investments);
+    const b = basics(p);
+    let decision = null;
+    if (!b.shortfall) {
+      const range = priceRange(p, b);
+      const inputs = decisionInputs(p, b, range.suggested);
+      const result = simulate(inputs);
+      const re = result.realEstate;
+      const nums = [range.suggested, range.bankCap, re.netWorth, result.sp500.netWorth, re.monthlyMortgagePayment];
+      if (nums.some((n) => !Number.isFinite(n)) || re.ltv > re.maxLtv + 1e-9 || re.equityShortfall || range.suggested > range.bankCap || re.priceCapped) {
+        bad++; if (bad < 4) console.error("bad decision", p, range, re.ltv, re.maxLtv);
+      }
+      decision = { price: range.suggested, result, lev: leverage(result, p, b), be: breakEvenAppreciation(inputs) };
+    }
+    const text = advisorPrompt(p, b, decision, {});
+    if (/NaN|undefined|Infinity/.test(text)) { bad++; if (bad < 4) console.error("bad prompt", p); }
+  }
+  ok(bad === 0, "fuzz: 400 random households, finite numbers, price within the bank limit, clean prompt");
 }
 
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }

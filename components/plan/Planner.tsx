@@ -28,6 +28,7 @@ import {
   DEFAULT_PROFILE,
   PROFILE_BOUNDS as B,
   COMFORTABLE_PTI,
+  EXPENSIVE_DEBT_RATE,
   type Profile,
   type Basics,
   type Answers,
@@ -246,7 +247,8 @@ export default function Planner() {
               <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
                 <h2 className="text-xl font-bold text-slate-900">דירה או שוק ההון?</h2>
                 <p className="mt-1 text-[14px] leading-relaxed text-slate-600">
-                  בדקנו מה קורה אם שמים את {formatILS(b.available)}
+                  בדקנו מה קורה אם שמים את {formatILS(decision.inputs.equity)}
+                  {decision.inputs.equity < b.available ? ` (הכלי מחשב עד ${c(decision.inputs.equity)})` : ""}
                   {decision.result.realEstate.oldHomeNetProceeds > 0
                     ? ` ועוד ${c(decision.result.realEstate.oldHomeNetProceeds)} ממכירת הדירה הנוכחית`
                     : ""}{" "}
@@ -514,17 +516,28 @@ function StepBasics({ p, set, b }: { p: Profile; set: SetFn; b: Basics }) {
       <ol className="divide-y divide-slate-100">
         <LadderItem icon={<ShieldCheck size={17} />} title="כרית ביטחון" amount={b.cushion}>
           {p.cushionMonths} חודשי הוצאות בצד, בפיקדון או בקרן כספית. את הכסף הזה לא משקיעים ולא ממנפים.
+          {b.cushion < b.cushionTarget && (
+            <> יש לכם כרגע {formatILS(b.cushion)} מתוך {formatILS(b.cushionTarget)}, ואת השאר משלימים מהחיסכון החודשי.</>
+          )}
         </LadderItem>
         {b.bigExpense > 0 && (
           <LadderItem icon={<CalendarClock size={17} />} title="ההוצאה הגדולה שמתוכננת" amount={b.bigExpense}>
             כסף שתצטרכו בקרוב לא שמים בדירה או במניות. שומרים אותו בצד.
+            {b.bigExpense < p.bigExpense && <> חסרים עוד {formatILS(p.bigExpense - b.bigExpense)}, מהחיסכון החודשי.</>}
           </LadderItem>
         )}
         {p.debt > 0 ? (
-          b.debtPayoff > 0 ? (
+          p.debtRate >= EXPENSIVE_DEBT_RATE ? (
             <LadderItem icon={<CreditCard size={17} />} title="להחזיר את ההלוואה" amount={b.debtPayoff}>
               ריבית של {formatPct(p.debtRate, 1)} היא יקרה. כל שקל שמחזירים חוסך {formatPct(p.debtRate, 1)} בשנה בלי שום סיכון, יותר ממה
               שסביר לצפות מהשקעה.
+              {b.debtKept > 0 && (
+                <>
+                  {" "}
+                  {b.debtPayoff > 0 ? `נשארים ${formatILS(b.debtKept)}` : "כרגע אין כסף פנוי להחזר"}: כדאי להחזיר מהחיסכון החודשי לפני כל
+                  השקעה.
+                </>
+              )}
             </LadderItem>
           ) : (
             <LadderItem icon={<CreditCard size={17} />} title="ההלוואה זולה" done>
@@ -648,9 +661,19 @@ function StepPlan({
   onCopy: (text: string) => void;
 }) {
   const steps: string[] = [];
-  steps.push(`לשים ${formatILS(b.cushion)} בצד, כרית ביטחון בפיקדון או בקרן כספית.`);
-  if (b.bigExpense > 0) steps.push(`לשמור ${formatILS(b.bigExpense)} להוצאה הגדולה שמתוכננת.`);
-  if (b.debtPayoff > 0) steps.push(`להחזיר את ההלוואה של ${formatILS(b.debtPayoff)} (ריבית ${formatPct(p.debtRate, 1)}).`);
+  if (b.monthlySaving <= 0) steps.push("לאזן את התקציב החודשי. כל עוד ההוצאות גבוהות מההכנסה, משכנתא או השקעה חודשית לא יחזיקו.");
+  steps.push(
+    b.cushion < b.cushionTarget
+      ? `לבנות כרית ביטחון של ${formatILS(b.cushionTarget)} בפיקדון או בקרן כספית: יש ${formatILS(b.cushion)}, ומשלימים מהחיסכון החודשי.`
+      : `לשים ${formatILS(b.cushion)} בצד, כרית ביטחון בפיקדון או בקרן כספית.`,
+  );
+  if (p.bigExpense > 0) steps.push(`לשמור ${formatILS(p.bigExpense)} להוצאה הגדולה שמתוכננת.`);
+  if (p.debt > 0 && p.debtRate >= EXPENSIVE_DEBT_RATE)
+    steps.push(
+      b.debtKept > 0
+        ? `להחזיר את ההלוואה (${formatILS(p.debt)}, ריבית ${formatPct(p.debtRate, 1)})${b.debtPayoff > 0 ? `: ${formatILS(b.debtPayoff)} עכשיו, והשאר מהחיסכון החודשי` : " מהחיסכון החודשי"}.`
+        : `להחזיר את ההלוואה של ${formatILS(b.debtPayoff)} (ריבית ${formatPct(p.debtRate, 1)}).`,
+    );
   steps.push("להמשיך להפקיד לקרן השתלמות עד התקרה הפטורה ממס. זה החיסכון המשתלם ביותר מבחינת מס.");
 
   const r = decision?.result;
@@ -661,9 +684,9 @@ function StepPlan({
     big =
       r.realEstate.oldHomeNetProceeds > 0
         ? `ההשוואה הייתה: מעבר לדירה החדשה, מול מכירת הדירה והשקעה של הכול (${c(r.realEstate.startCapital)}) במדד ומגורים בשכירות. המדד יצא משתלם יותר. אם למכור ולשכור לא בא בחשבון, כדאי לבדוק עם יועץ אפשרות שלישית: להישאר בדירה ולהשקיע במדד רק את ${c(b.available)}.`
-        : `להשקיע ${formatILS(b.available)} בקרן מחקה S&P 500 בדמי ניהול נמוכים, ולהמשיך להפקיד כל חודש.`;
+        : `בחישוב, השקעה של ${formatILS(b.available)} במדד S&P 500 (למשל בקרן מחקה בדמי ניהול נמוכים) והפקדה חודשית משאירות יותר מדירה.`;
   else if (r.winner === "realEstate")
-    big = `לקנות דירה בסביבות ${c(decision!.price)}, עם משכנתא של כ-${c(r.realEstate.loanAmount)}.`;
+    big = `בחישוב, דירה בסביבות ${c(decision!.price)} עם משכנתא של כ-${c(r.realEstate.loanAmount)} משאירה יותר מהשקעה במדד.`;
   else big = "שני המסלולים קרובים מאוד. אפשר לשלב: חלק בדירה וחלק במדד.";
   steps.push(big);
 
@@ -699,6 +722,7 @@ function StepPlan({
     <div className="space-y-5">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
         <h2 className="text-xl font-bold text-slate-900">התוכנית שלכם, לפי הסדר</h2>
+        <p className="mt-1 text-[13px] text-slate-500">סיכום של החישוב לפי הנתונים וההנחות שלכם. לא המלצה אישית.</p>
         <ol className="mt-4 space-y-3">
           {steps.map((s, i) => (
             <li key={i} className="flex gap-3 text-[14.5px] leading-relaxed text-slate-800">
