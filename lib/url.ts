@@ -32,6 +32,7 @@ const KEYS: Record<keyof SimInputs, string> = {
   spLoanTerm: "slt",
   ownRentPaid: "orp",
   liveInNew: "live",
+  liveElsewhere: "else",
   incomeCheck: "ic",
   monthlyIncome: "inc",
 };

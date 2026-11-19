@@ -120,17 +120,23 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
   for (let m = 1; m <= N; m++) {
     const y = Math.floor((m - 1) / 12);
     // Additional apartment + moving in: the old apartment is the one rented out
-    const rentedValue = additional && x.liveInNew ? x.oldHomeValue : price;
+    const both = additional && x.liveElsewhere;
+    const rentedValue = additional && x.liveInNew && !both ? x.oldHomeValue : price;
     const gross = ((rentedValue * x.rentalYield) / 1200) * Math.pow(1 + x.rentGrowth / 100, y);
     const received = living ? gross : (gross * 11) / 12;
-    let rentTax = 0;
     const ceiling = 5_654 * Math.pow(1 + x.inflation / 100, y); // frozen in year 1 (2027), indexed after
-    if (!living && received > ceiling) {
-      const exemptPart = Math.max(0, Math.min(ceiling, 2 * ceiling - received));
-      const taperTrack = 0.1 * (received - exemptPart);
-      const deduction = additional ? 0 : Math.min(x.ownRentPaid, 7_500);
-      const flatTrack = 0.1 * Math.max(0, received - deduction);
-      rentTax = Math.min(taperTrack, flatTrack);
+    const householdTax = (rent: number, deduction: number) => {
+      if (rent <= ceiling) return 0;
+      const exemptPart = Math.max(0, Math.min(ceiling, 2 * ceiling - rent));
+      return Math.min(0.1 * (rent - exemptPart), 0.1 * Math.max(0, rent - deduction));
+    };
+    let rentTax = 0;
+    if (both) {
+      // the old apartment is rented in both tracks; count only the extra tax the new rent causes
+      const oldReceived = (((x.oldHomeValue * x.rentalYield) / 1200) * Math.pow(1 + x.rentGrowth / 100, y) * 11) / 12;
+      rentTax = householdTax(oldReceived + received, 0) - householdTax(oldReceived, 0);
+    } else if (!living) {
+      rentTax = householdTax(received, additional ? 0 : Math.min(x.ownRentPaid, 7_500));
     }
     rentTaxTotal += rentTax;
     const running = 0.08 * received + 150 * Math.pow(1 + x.inflation / 100, y);

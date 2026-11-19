@@ -142,6 +142,12 @@ export interface SimInputs {
    * track they live in a rental.
    */
   liveInNew: boolean;
+  /**
+   * Additional apartment: the owner lives elsewhere and rents out BOTH apartments.
+   * The old one is rented out in both tracks, so only the extra rent tax caused by
+   * the new apartment's rent (the household shares one exemption ceiling) differs.
+   */
+  liveElsewhere: boolean;
   /** Optional bank-approval check: household's net monthly income */
   incomeCheck: boolean;
   monthlyIncome: number;
@@ -216,6 +222,7 @@ export const DEFAULT_INPUTS: SimInputs = {
   spLoanTerm: 10,
   ownRentPaid: 0,
   liveInNew: false,
+  liveElsewhere: false,
   incomeCheck: false,
   monthlyIncome: 25_000,
 };
@@ -242,6 +249,8 @@ export interface RealEstateSummary {
   livesInNew: boolean;
   /** Additional apartment: moves into the new one and rents out the old one */
   rentsOutOld: boolean;
+  /** Additional apartment, living elsewhere: both apartments rented out */
+  rentsOutBoth: boolean;
   /** Own money at the start (cash + net proceeds from the old home) */
   startCapital: number;
   oldHomeNetProceeds: number;
@@ -352,7 +361,7 @@ function safeNum(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-const BOOL_KEYS: BoolKey[] = ["liveInNew", "sellFirst", "autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "incomeCheck"];
+const BOOL_KEYS: BoolKey[] = ["liveElsewhere", "liveInNew", "sellFirst", "autoPrice", "useBroker", "cashflowMatching", "loanEnabled", "spLoanEnabled", "incomeCheck"];
 
 /** Coerce arbitrary (possibly URL-sourced) input into a valid SimInputs. */
 export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApartment", unknown>>): SimInputs {
@@ -510,7 +519,12 @@ export function livesInNew(inputs: SimInputs): boolean {
  * old home itself is the same in both tracks; only its rent differs.
  */
 export function rentsOutOld(inputs: SimInputs): boolean {
-  return inputs.liveInNew && inputs.apartmentType === "additional";
+  return inputs.liveInNew && inputs.apartmentType === "additional" && !inputs.liveElsewhere;
+}
+
+/** Additional apartment, living elsewhere: both apartments are rented out. */
+export function rentsOutBoth(inputs: SimInputs): boolean {
+  return inputs.liveElsewhere && inputs.apartmentType === "additional";
 }
 
 /** Value the rent is based on: the old apartment when it's the one rented out. */
@@ -532,7 +546,10 @@ export function purchaseCash(inputs: SimInputs): number {
  */
 export function paymentToIncome(inputs: SimInputs, mortgagePayment: number, otherLoanPayment: number): number {
   const otherLoans = inputs.loanEnabled && inputs.loanTerm * 12 > 18 ? otherLoanPayment : 0;
-  const rentPaid = inputs.apartmentType === "additional" || livesInNew(inputs) ? 0 : inputs.ownRentPaid;
+  // Rent paid elsewhere reduces disposable income whenever the buyer doesn't live in the purchased apartment
+  const livesInPurchased = livesInNew(inputs) || rentsOutOld(inputs);
+  const livesInOwnOld = inputs.apartmentType === "additional" && !inputs.liveInNew && !inputs.liveElsewhere;
+  const rentPaid = livesInPurchased || livesInOwnOld ? 0 : inputs.ownRentPaid;
   const disposable = inputs.monthlyIncome - otherLoans - rentPaid;
   return disposable > 0 ? mortgagePayment / disposable : 10;
 }
@@ -739,7 +756,16 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     const ceiling = RENT_EXEMPT_CEILING_MONTHLY * thresholdIndex(yearIdx + 1);
     // The rent-paid deduction is for a sole-apartment owner only (not an additional apartment)
     const ownRent = apartmentType === "additional" ? 0 : inputs.ownRentPaid;
-    const rentTax = living ? 0 : monthlyRentTax(collected, ceiling, ownRent);
+    let rentTax = living ? 0 : monthlyRentTax(collected, ceiling, ownRent);
+    if (rentsOutBoth(inputs)) {
+      // The old apartment's rent uses the household's exemption first (it's rented in both
+      // tracks); the new apartment adds only the extra tax on the combined rent.
+      const oldCollected =
+        ((inputs.oldHomeValue * rentalYield) / 100 / 12) *
+        Math.pow(1 + rentGrowth / 100, yearIdx) *
+        (1 - VACANCY_MONTHS_PER_YEAR / 12);
+      rentTax = monthlyRentTax(oldCollected + collected, ceiling) - monthlyRentTax(oldCollected, ceiling);
+    }
     const ownership = collected * MAINTENANCE_RATE + INSURANCE_MONTHLY * Math.pow(1 + inflation / 100, yearIdx);
     const rentNet = collected - rentTax - ownership;
     rentGrossTotal += rentGross;
@@ -801,6 +827,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     apartmentType,
     livesInNew: livesInNew(inputs),
     rentsOutOld: rentsOutOld(inputs),
+    rentsOutBoth: rentsOutBoth(inputs),
     startCapital: equity,
     oldHomeNetProceeds: old.net,
     oldHomeUsableAtPurchase: oldHomeUsableAtPurchase(inputs),

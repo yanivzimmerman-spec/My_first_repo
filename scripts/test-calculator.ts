@@ -149,6 +149,19 @@ ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested,
   ok(!k.realEstate.shevachExempt, "selling the new apartment while owning the old one is not exempt");
 }
 
+// Keep the old apartment, live elsewhere, rent out both: the household shares one exemption ceiling
+{
+  const base = { ...DEFAULT_INPUTS, apartmentType: "additional" as const, equity: 1_000_000, propertyPrice: 1_600_000, rentalYield: 3.5 };
+  const stay = simulate(base);
+  const both = simulate({ ...base, liveElsewhere: true, oldHomeValue: 2_500_000 });
+  ok(both.realEstate.rentsOutBoth && !both.realEstate.rentsOutOld, "live elsewhere: both apartments rented out");
+  ok(near(both.realEstate.initialMonthlyRentGross, stay.realEstate.initialMonthlyRentGross, 0.01), "the new apartment's own rent is unchanged");
+  ok(stay.realEstate.totalRentTax === 0 && both.realEstate.totalRentTax > 0, "the old apartment's rent uses the exemption, so the new rent is taxed");
+  const coll = (1_600_000 * 3.5) / 1200 * 11 / 12;
+  const oldColl = (5_000_000 * 3.5) / 1200 * 11 / 12; // ₪13,368 a month: alone above twice the ceiling
+  ok(near(monthlyRentTax(oldColl + coll, 5_654) - monthlyRentTax(oldColl, 5_654), 0.1 * coll, 0.01), "above twice the ceiling, the extra tax is 10% of the new rent");
+}
+
 // Loan to invest in the S&P
 const spl = simulate({ ...DEFAULT_INPUTS, spLoanEnabled: true, spLoanAmount: 300_000 });
 ok(near(spl.points[0].sp500, DEFAULT_INPUTS.equity, 0.01), "S&P loan: year 0 net worth = own equity (loan offsets)");

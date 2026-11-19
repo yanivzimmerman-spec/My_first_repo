@@ -34,16 +34,19 @@ function expectedStart(inp: SimInputs): number {
 }
 
 /** Independent month-1 rent after vacancy, rent tax (cheaper track), 8% maintenance, ₪150 insurance. */
-function expectedNetRent(price: number, yieldPct: number, ownRent = 0, living = false): number {
+function rentTaxOf(collected: number, ownRent = 0): number {
+  if (collected <= RENT_CEILING) return 0;
+  const exempt = Math.max(0, Math.min(RENT_CEILING, 2 * RENT_CEILING - collected));
+  const deduction = Math.min(ownRent, 7_500); // s.122(f): up to ₪90K a year
+  return Math.min(0.1 * Math.max(0, collected - deduction), 0.1 * (collected - exempt));
+}
+
+/** oldCollected > 0: another apartment's rent already uses the household ceiling; tax is the extra. */
+function expectedNetRent(price: number, yieldPct: number, ownRent = 0, living = false, oldCollected = 0): number {
   const gross = (price * yieldPct) / 100 / 12;
   if (living) return gross - 0.08 * gross - 150; // saved rent: no vacancy, no tax
   const collected = (gross * 11) / 12;
-  let tax = 0;
-  if (collected > RENT_CEILING) {
-    const exempt = Math.max(0, Math.min(RENT_CEILING, 2 * RENT_CEILING - collected));
-    const deduction = Math.min(ownRent, 7_500); // s.122(f): up to ₪90K a year
-    tax = Math.min(0.1 * Math.max(0, collected - deduction), 0.1 * (collected - exempt));
-  }
+  const tax = oldCollected > 0 ? rentTaxOf(oldCollected + collected) - rentTaxOf(oldCollected) : rentTaxOf(collected, ownRent);
   return collected - tax - 0.08 * collected - 150;
 }
 
@@ -85,6 +88,16 @@ function spitzerBalance(P: number, ratePct: number, years: number, k: number): n
   if (i === 0) return P * (1 - k / n);
   const pmt = spitzerPayment(P, ratePct, years);
   return P * Math.pow(1 + i, k) - (pmt * (Math.pow(1 + i, k) - 1)) / i;
+}
+
+/** Old apartment's rent collected over the horizon (live-elsewhere mode). */
+function sumOldRent(inp: SimInputs): number {
+  let t = 0;
+  for (let m = 1; m <= inp.years * 12; m++) {
+    const y = Math.floor((m - 1) / 12);
+    t += ((inp.oldHomeValue * inp.rentalYield) / 1200) * Math.pow(1 + inp.rentGrowth / 100, y) * (11 / 12);
+  }
+  return t;
 }
 
 /** Total S&P loan payments made within the horizon. */
@@ -153,10 +166,13 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   // 4b. Month-1 cash flow, computed independently
   const living = inp.liveInNew && inp.apartmentType !== "additional";
   check(re.livesInNew === living, "living in only for a sole apartment", ctx);
-  const rentOld = inp.liveInNew && inp.apartmentType === "additional";
+  const both = inp.liveElsewhere && inp.apartmentType === "additional";
+  const rentOld = inp.liveInNew && inp.apartmentType === "additional" && !both;
   check(re.rentsOutOld === rentOld, "additional + move in → the old apartment is rented out", ctx);
+  check(re.rentsOutBoth === both, "additional + live elsewhere → both apartments rented out", ctx);
   const rentBase = rentOld ? inp.oldHomeValue : re.propertyPrice;
-  const expNet = expectedNetRent(rentBase, inp.rentalYield, inp.apartmentType === "additional" ? 0 : inp.ownRentPaid, living);
+  const oldCollected = both ? ((inp.oldHomeValue * inp.rentalYield) / 1200) * (11 / 12) : 0;
+  const expNet = expectedNetRent(rentBase, inp.rentalYield, inp.apartmentType === "additional" ? 0 : inp.ownRentPaid, living, oldCollected);
   check(near(re.initialMonthlyRentNet, expNet, 0.01), "month-1 net rent (independent)", ctx);
   const expPmt = spitzerPayment(re.loanAmount, inp.mortgageRate, inp.mortgageTerm);
   const expLoanPmt = inp.loanEnabled ? spitzerPayment(inp.loanAmount, inp.loanRate, inp.loanTerm) : 0;
@@ -191,7 +207,10 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   else if (!inp.spLoanEnabled) check(sp.monthlyContributionsTotal === 0, "no matching → no S&P contributions", ctx);
 
   // 7. Taxes
-  check(re.totalRentTax <= 0.1 * (re.totalRentGross - re.totalVacancyLoss) + 0.01, "rent tax ≤ 10% of rent collected", ctx);
+  // Living elsewhere with two rentals: the extra tax can exceed 10% of the new rent (it also ends the old
+  // rent's exemption), but never 10% of the household's total rent.
+  const oldRentTotal = re.rentsOutBoth ? sumOldRent(inp) : 0;
+  check(re.totalRentTax <= 0.1 * (re.totalRentGross - re.totalVacancyLoss + oldRentTotal) + 0.01, "rent tax ≤ 10% of the household's rent", ctx);
   check(re.shevachTax >= 0 && re.surtax >= 0 && sp.surtax >= 0 && sp.capitalGainsTax >= 0, "taxes non-negative", ctx);
   const ceil = SHEVACH_SINGLE_CEILING * Math.pow(1 + inp.inflation / 100, Math.max(0, inp.years - 1));
   if (inp.apartmentType !== "additional") {
@@ -249,7 +268,8 @@ for (const apartmentType of TYPES)
               for (const years of YEARS)
                 for (const [, market] of Object.entries(MARKETS))
                  for (const oldHome of apartmentType === "upgrader" ? OLD_HOMES : [{}])
-                  for (const liveInNew of BOOLS) {
+                  for (const liveInNew of BOOLS)
+                   for (const liveElsewhere of apartmentType === "additional" ? BOOLS : [false]) {
                   const inp: SimInputs = {
                     ...DEFAULT_INPUTS,
                     ...market,
@@ -265,6 +285,7 @@ for (const apartmentType of TYPES)
                     mortgageTerm: years === 30 ? 20 : 25, // also cover "mortgage paid off before the end"
                     ...oldHome,
                     liveInNew,
+                    liveElsewhere,
                   };
                   const r = simulate(inp);
                   checkScenario(r.inputs, r);

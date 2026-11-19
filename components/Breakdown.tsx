@@ -101,7 +101,9 @@ export default function Breakdown({ result }: { result: SimResult }) {
                 re: re.totalRentTax,
                 sp: null,
                 negative: true,
-                note: "פטור עד ₪5,654 לחודש; מעל זה 10%",
+                note: re.rentsOutBoth
+                  ? "המס הנוסף שהדירה החדשה גורמת: תקרת הפטור משותפת עם הדירה הישנה"
+                  : "פטור עד ₪5,654 לחודש; מעל זה 10%",
               } as Line,
             ]),
         {

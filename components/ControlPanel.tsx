@@ -141,19 +141,25 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             <div className="mt-4">
               <p className="mb-2 text-[15px] text-slate-700">איפה תגורו?</p>
               <Segmented
-                ariaLabel="איזו דירה משכירים"
+                ariaLabel="איפה תגורו"
                 accent={RE}
-                value={inputs.liveInNew ? "moveIn" : "stay"}
-                onChange={(v) => set("liveInNew", v === "moveIn")}
+                value={inputs.liveElsewhere ? "elsewhere" : inputs.liveInNew ? "moveIn" : "stay"}
+                onChange={(v) => {
+                  set("liveElsewhere", v === "elsewhere");
+                  set("liveInNew", v === "moveIn");
+                }}
                 options={[
-                  { value: "stay", label: "בישנה, משכירים את החדשה" },
-                  { value: "moveIn", label: "בחדשה, משכירים את הישנה" },
+                  { value: "stay", label: "בדירה הישנה" },
+                  { value: "moveIn", label: "בדירה החדשה" },
+                  { value: "elsewhere", label: "במקום אחר" },
                 ]}
               />
               <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
-                {inputs.liveInNew
-                  ? "עוברים לדירה החדשה ומשכירים את הישנה. שכר הדירה מגיע מהדירה הישנה. במסלול ה-S&P ממשיכים לגור בדירה הישנה."
-                  : "ממשיכים לגור בדירה הקיימת ומשכירים את החדשה."}
+                {inputs.liveElsewhere
+                  ? "גרים במקום אחר ומשכירים את שתי הדירות. הדירה הישנה מושכרת גם במסלול ה-S&P, אבל תקרת הפטור על שכירות משותפת לשתיהן, ולכן הדירה החדשה מוסיפה מס."
+                  : inputs.liveInNew
+                    ? "עוברים לדירה החדשה ומשכירים את הישנה. שכר הדירה מגיע מהדירה הישנה. במסלול ה-S&P ממשיכים לגור בדירה הישנה."
+                    : "ממשיכים לגור בדירה הקיימת ומשכירים את החדשה."}
               </p>
             </div>
           )}
@@ -179,7 +185,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           )}
         </div>
 
-        {re.rentsOutOld && (
+        {(re.rentsOutOld || re.rentsOutBoth) && (
           <div className="rounded-xl border border-slate-200 p-4">
             <SliderInput
               label="כמה שווה הדירה הישנה?"
@@ -188,7 +194,11 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               bound={BOUNDS.oldHomeValue}
               accent={RE}
               onChange={(v) => set("oldHomeValue", v)}
-              hint="לפי השווי הזה מחושב שכר הדירה שתקבלו עליה"
+              hint={
+                re.rentsOutBoth
+                  ? "לפי השווי הזה מחושב שכר הדירה על הדירה הישנה, שנספר בתקרת הפטור"
+                  : "לפי השווי הזה מחושב שכר הדירה שתקבלו עליה"
+              }
             />
           </div>
         )}
@@ -286,7 +296,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         </div>
 
         <SliderInput
-          label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : re.rentsOutOld ? "שכר דירה על הדירה הישנה" : "שכר דירה חודשי"}
+          label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : re.rentsOutOld ? "שכר דירה על הדירה הישנה" : re.rentsOutBoth ? "שכר דירה על הדירה החדשה" : "שכר דירה חודשי"}
           kind="currency"
           value={Math.round(rent / 10) * 10}
           bound={rentBound}
@@ -526,6 +536,17 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               accent={RE}
               onChange={(v) => set("rentGrowth", v)}
             />
+            {re.rentsOutBoth && (
+              <SliderInput
+                label="שכר דירה שאתם משלמים בעצמכם"
+                kind="currency"
+                value={inputs.ownRentPaid}
+                bound={BOUNDS.ownRentPaid}
+                accent={RE}
+                onChange={(v) => set("ownRentPaid", v)}
+                hint="משמש רק לבדיקת אישור הבנק. עם שתי דירות אין קיזוז של שכר הדירה במס. 0 = לא משלמים (למשל גרים אצל המשפחה)."
+              />
+            )}
             {type !== "additional" && !re.livesInNew && (
               <SliderInput
                 label="שכר דירה שאתם משלמים בעצמכם"
