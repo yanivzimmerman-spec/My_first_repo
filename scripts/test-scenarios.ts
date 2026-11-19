@@ -57,6 +57,8 @@ const OLD_HOMES: Partial<SimInputs>[] = [
   { oldHomeValue: 600_000, oldHomeMortgage: 600_000, sellFirst: true },
   { oldHomeValue: 2_000_000, oldHomeMortgage: 500_000, oldHomePrepayFee: 15_000, sellFirst: false },
   { oldHomeValue: 6_000_000, oldHomeMortgage: 0, oldHomePrepayFee: 50_000, sellFirst: true },
+  // buy first with the old mortgage above 50% of its value → no bridge possible
+  { oldHomeValue: 2_000_000, oldHomeMortgage: 1_500_000, sellFirst: false },
 ];
 const MARKETS: Record<string, Partial<SimInputs>> = {
   low: { mortgageRate: 2.5, rentalYield: 2.2, rentGrowth: 1, appreciation: 1, spReturn: 5, spFee: 0.05, inflation: 1 },
@@ -101,6 +103,7 @@ function checkScenario(inp: SimInputs, r: SimResult) {
   const start = expectedStart(inp);
   check(near(re.startCapital, start, 0.01) && near(sp.initialInvestment, start, 0.01), "start capital = cash + net old-home proceeds", ctx);
   check(start >= 200_000 - 0.01, "start capital ≥ ₪200K", ctx);
+  check(inp.equity + re.oldHomeUsableAtPurchase >= 200_000 - 0.01, "money usable on purchase day ≥ ₪200K", ctx);
   // Buy-first upgrader: only a bridge loan on the old home (all loans on it ≤ 50% of its value) before the sale
   const oldNet = start - inp.equity;
   const usableOld =

@@ -376,9 +376,10 @@ export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApa
   }
   const v = raw.spVehicle;
   if (v === "israeli" || v === "irish") out.spVehicle = v;
-  // Starting capital is at least ₪200K, so the cheapest apartment is always affordable.
+  // Money usable on purchase day is at least ₪200K, so the cheapest apartment is always
+  // affordable within the bank limit (a buy-first upgrader may have no bridge at all).
   out.oldHomeMortgage = Math.min(out.oldHomeMortgage, out.oldHomeValue);
-  out.equity = Math.max(out.equity, MIN_START_CAPITAL - oldHomeProceeds(out).net);
+  out.equity = Math.max(out.equity, MIN_START_CAPITAL - oldHomeUsableAtPurchase(out));
   return out;
 }
 

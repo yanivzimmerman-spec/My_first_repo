@@ -18,7 +18,7 @@ interface Props {
 }
 
 const TYPE_TEXT: Record<ApartmentType, string> = {
-  single: "זו תהיה הדירה היחידה שלכם. מס רכישה נמוך, ואין מס כשמוכרים. הבנק מממן עד 75%.",
+  single: "זו תהיה הדירה היחידה שלכם. מס רכישה נמוך, ואין מס שבח כשמוכרים (עד ₪5,008,000). הבנק מממן עד 75%.",
   upgrader: "מוכרים את הדירה שיש לכם וקונים אחרת. מס רכישה כמו דירה יחידה.",
   additional:
     "יש לכם כבר דירה ואתם שומרים אותה. מס רכישה 8%, מס 25% על הרווח כשמוכרים, והבנק מממן עד 50%. ה-8% הם הוראת שעה עד 10.2.2027; אם לא תוארך, המס יירד.",
@@ -103,7 +103,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           value={inputs.equity}
           bound={{
             ...BOUNDS.equity,
-            min: Math.max(0, MIN_START_CAPITAL - re.oldHomeNetProceeds),
+            min: Math.max(0, MIN_START_CAPITAL - re.oldHomeUsableAtPurchase),
           }}
           onChange={(v) => set("equity", v)}
           hint={type === "upgrader" ? "מזומן או חסכונות. הכסף ממכירת הדירה נוסף בהמשך" : "ההון העצמי שאתם יכולים להשקיע היום"}
@@ -457,7 +457,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               bound={BOUNDS.mortgageRate}
               accent={RE}
               onChange={(v) => set("mortgageRate", v)}
-              hint="ממוצע לכל המסלולים. ב-2026 כ-4.6% עד 4.8%"
+              hint="ממוצע לכל המסלולים. ב-2026: קבועה לא צמודה כ-4.6%, משתנה כ-4.4%. לפחות שליש מהמשכנתא חייב להיות בריבית קבועה."
             />
             <SliderInput
               label="תקופת המשכנתא"
