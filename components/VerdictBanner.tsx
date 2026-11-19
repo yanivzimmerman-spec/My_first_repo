@@ -19,6 +19,7 @@ export function verdictText(r: SimResult): string {
 function Bar({
   label,
   value,
+  today,
   ret,
   max,
   color,
@@ -27,6 +28,8 @@ function Bar({
 }: {
   label: string;
   value: number;
+  /** Same amount in today's money */
+  today: number;
   ret: number;
   max: number;
   color: string;
@@ -51,11 +54,11 @@ function Bar({
       <div className="h-3 overflow-hidden rounded-full bg-slate-100">
         <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${w}%`, background: color }} />
       </div>
+      <p className="mt-1 text-[12px] text-slate-500">בכוח הקנייה של היום: כ-{formatCompactILS(today)}</p>
     </div>
   );
 }
 
-/** The answer: one sentence, two bars, three facts. */
 function breakEvenText(r: SimResult, be: BreakEven): string {
   const assumed = formatPct(r.inputs.appreciation, 1);
   if (be.value === null) {
@@ -69,8 +72,29 @@ function breakEvenText(r: SimResult, be: BreakEven): string {
     : `הדירה תנצח רק אם המחירים יעלו ביותר מ-${v} בשנה. הנחתם ${assumed}.`;
 }
 
-export default function VerdictBanner({ result, breakEven }: { result: SimResult; breakEven: BreakEven }) {
+function breakEvenRentText(r: SimResult, be: BreakEven): string | null {
+  if (be.value === null) return null;
+  const v = formatILS(Math.round(be.value / 10) * 10);
+  const now = formatILS(Math.round(r.realEstate.initialMonthlyRentGross / 10) * 10);
+  const what = r.realEstate.livesInNew ? "שכר הדירה שנחסך" : "שכר הדירה";
+  return r.winner === "realEstate"
+    ? `או כל עוד ${what} גבוה מ-${v} בחודש (הנחתם ${now}).`
+    : `או אם ${what} יהיה מעל ${v} בחודש (הנחתם ${now}).`;
+}
+
+/** The answer: one sentence, two bars, reasons, break-even, link to the mixed strategy. */
+export default function VerdictBanner({
+  result,
+  breakEven,
+  breakEvenRent,
+}: {
+  result: SimResult;
+  breakEven: BreakEven;
+  breakEvenRent: BreakEven;
+}) {
   const r = result;
+  // Amounts are in shekels of that year; divide by inflation for today's money
+  const deflator = Math.pow(1 + r.inputs.inflation / 100, r.inputs.years);
   const max = Math.max(r.realEstate.netWorth, r.sp500.netWorth);
   const winInk = r.winner === "realEstate" ? "var(--ink-re)" : r.winner === "sp500" ? "var(--ink-sp)" : "var(--accent-ink)";
 
@@ -89,12 +113,16 @@ export default function VerdictBanner({ result, breakEven }: { result: SimResult
           </>
         )}
       </h2>
-      <p className="mt-1 text-[14px] text-slate-500">שווי נטו ביום המכירה, אחרי כל המסים וסילוק המשכנתא{r.realEstate.extraLoanPrincipal > 0 ? " וההלוואה" : ""}</p>
+      <p className="mt-1 text-[14px] text-slate-500">
+        שווי נטו ביום המכירה, אחרי כל המסים וסילוק המשכנתא{r.realEstate.extraLoanPrincipal > 0 ? " וההלוואה" : ""}. הסכומים בשקלים של
+        אותה שנה.
+      </p>
 
       <div className="mt-6 space-y-5">
         <Bar
           label="קונים דירה"
           value={r.realEstate.netWorth}
+          today={r.realEstate.netWorth / deflator}
           ret={r.realEstate.totalReturnPct}
           max={max}
           color="var(--bar-re)"
@@ -104,6 +132,7 @@ export default function VerdictBanner({ result, breakEven }: { result: SimResult
         <Bar
           label="S&P 500"
           value={r.sp500.netWorth}
+          today={r.sp500.netWorth / deflator}
           ret={r.sp500.totalReturnPct}
           max={max}
           color="var(--bar-sp)"
@@ -127,8 +156,14 @@ export default function VerdictBanner({ result, breakEven }: { result: SimResult
           ))}
         </ul>
         <p className="mt-4 rounded-lg bg-slate-50 px-3.5 py-2.5 text-[14px] font-medium leading-relaxed text-slate-800">
-          {breakEvenText(r, breakEven)}
+          {breakEvenText(r, breakEven)} {breakEvenRentText(r, breakEvenRent)}
         </p>
+        <a
+          href="#combo"
+          className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+        >
+          רוצים לשלב? חלק בדירה וחלק במדד ←
+        </a>
       </div>
     </section>
   );

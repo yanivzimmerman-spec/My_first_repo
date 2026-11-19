@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Share2, Check, RotateCcw, Moon, Sun, Mail, Copy } from "lucide-react";
 import { useTheme } from "@/lib/theme";
-import { DEFAULT_INPUTS, breakEvenAppreciation, simulate, type SimInputs } from "@/lib/calculator";
-import { PRESETS } from "@/lib/presets";
+import { DEFAULT_INPUTS, breakEvenAppreciation, breakEvenRent, simulate, BOUNDS, type SimInputs } from "@/lib/calculator";
+import { PRESETS, SCENARIO_DELTAS } from "@/lib/presets";
 import { inputsToQuery, queryToInputs } from "@/lib/url";
 import { formatCompactILS, formatILS } from "@/lib/format";
 import ControlPanel from "./ControlPanel";
@@ -12,6 +12,9 @@ import VerdictBanner, { verdictText } from "./VerdictBanner";
 import GrowthChart from "./GrowthChart";
 import Breakdown from "./Breakdown";
 import StoryCard from "./StoryCard";
+import ScenarioRange from "./ScenarioRange";
+import RisksCard from "./RisksCard";
+import ComboView from "./ComboView";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
@@ -60,12 +63,41 @@ export default function Simulator() {
   useEffect(() => {
     if (!hydrated || STANDALONE) return;
     const q = inputsToQuery(inputs);
-    const url = `${window.location.pathname}${q ? `?${q}` : ""}`;
+    const url = `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash}`;
     window.history.replaceState(null, "", url);
   }, [inputs, hydrated]);
 
   const result = useMemo(() => simulate(inputs), [inputs]);
   const breakEven = useMemo(() => breakEvenAppreciation(inputs), [inputs]);
+  const breakEvenRentResult = useMemo(() => breakEvenRent(inputs), [inputs]);
+  // Pessimistic / optimistic: shift the market assumptions for both tracks together
+  const scenarios = useMemo(() => {
+    const shift = (d: Record<string, number>) => {
+      const next = { ...inputs };
+      for (const [k, v] of Object.entries(d)) {
+        const key = k as "appreciation" | "rentGrowth" | "spReturn" | "fxDrift";
+        const b = BOUNDS[key];
+        next[key] = Math.min(b.max, Math.max(b.min, inputs[key] + v));
+      }
+      return simulate(next);
+    };
+    return { pess: shift(SCENARIO_DELTAS.pessimistic), opt: shift(SCENARIO_DELTAS.optimistic) };
+  }, [inputs]);
+
+  // Second page: the mixed strategy, reached through #combo (works in plain links and the artifact viewer)
+  const [view, setView] = useState<"main" | "combo">("main");
+  useEffect(() => {
+    const read = () => {
+      const next = window.location.hash === "#combo" ? "combo" : "main";
+      setView((prev) => {
+        if (prev !== next) window.scrollTo({ top: 0 });
+        return next;
+      });
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
 
   const set = useCallback(<K extends keyof SimInputs>(key: K, value: SimInputs[K]) => {
     setInputs((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
@@ -157,6 +189,10 @@ export default function Simulator() {
         </div>
       </header>
 
+      {view === "combo" ? (
+        <ComboView inputs={result.inputs} result={result} dark={theme === "dark"} />
+      ) : (
+        <>
       {/* ---------- Mobile: compact answer that stays on screen while editing ---------- */}
       <div className="sticky top-[env(safe-area-inset-top,0px)] z-30 -mx-4 mb-4 border-b border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between gap-3 text-[13px] tabular-nums">
@@ -176,17 +212,21 @@ export default function Simulator() {
         Layout: phone = answer → inputs → chart → details (one column).
         Desktop (RTL) = inputs in a sticky right column, results on the left.
       */}
-      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_1fr] lg:items-start lg:gap-8">
+      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_auto_1fr] lg:items-start lg:gap-8">
         <div className="min-w-0 lg:col-start-2 lg:row-start-1">
-          <VerdictBanner result={result} breakEven={breakEven} />
+          <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenRentResult} />
         </div>
 
         <aside
           aria-label="הנתונים שלכם"
-          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-4 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
+          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-5 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
         >
-          <ControlPanel inputs={inputs} result={result} set={set} />
+          <ControlPanel inputs={result.inputs} result={result} set={set} />
         </aside>
+
+        <div className="min-w-0 lg:col-start-2">
+          <ScenarioRange pess={scenarios.pess} base={result} opt={scenarios.opt} />
+        </div>
 
         <div className="min-w-0 lg:col-start-2">
           <StoryCard result={result} />
@@ -198,6 +238,7 @@ export default function Simulator() {
 
         <div className="min-w-0 space-y-5 lg:col-start-2">
           <Breakdown result={result} />
+          <RisksCard />
 
           <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
             <button
@@ -218,6 +259,8 @@ export default function Simulator() {
           </p>
         </div>
       </div>
+      </>
+      )}
 
       {/* ---------- Feedback ---------- */}
       <footer className="mt-10 flex flex-col items-start gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">

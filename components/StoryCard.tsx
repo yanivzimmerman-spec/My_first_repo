@@ -59,7 +59,14 @@ export default function StoryCard({ result }: { result: SimResult }) {
                 </>
               ) : (
                 <>
-                  {re.rentsOutOld && <>עוברים לגור בדירה החדשה ומשכירים את הישנה. </>}
+                  {re.rentsOutOld && (
+                    <>
+                      עוברים לגור בדירה החדשה ומשכירים את הישנה
+                      {Math.abs(re.housingDifference) > 1 &&
+                        (re.housingDifference < 0 ? " (הדירה החדשה זולה יותר, וזה נחשב כמגורים פחות טובים)" : " (הדירה החדשה טובה יותר)")}
+                      .{" "}
+                    </>
+                  )}
                   {re.rentsOutBoth && <>גרים במקום אחר ומשכירים את שתי הדירות. </>}
                   משלמים לבנק {formatILS(reMonthlyOut)}, ומהשכירות{re.rentsOutOld ? " של הדירה הישנה" : ""} נשארים{" "}
                   {formatILS(re.initialMonthlyRentNet)}.{" "}

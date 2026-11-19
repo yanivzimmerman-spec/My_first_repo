@@ -123,11 +123,12 @@ ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested,
 
 // Payment-to-income per Directive 329 annex: mortgage ÷ (income − other loans > 18 months − rent paid)
 {
-  const inp = { ...DEFAULT_INPUTS, incomeCheck: true, monthlyIncome: 25_000, loanEnabled: true, loanAmount: 200_000, loanRate: 8, loanTerm: 7 };
+  const inp = { ...DEFAULT_INPUTS, incomeCheck: true, monthlyIncome: 25_000, loanEnabled: true, loanAmount: 200_000, loanRate: 8, loanTerm: 7, ownRentAuto: false };
   const loanPmt = spitzerPayment(200_000, 8, 7);
   ok(near(paymentToIncome(inp, 9_500, loanPmt), 9_500 / (25_000 - loanPmt), 1e-9), "PTI: other loan reduces income, not added to payment");
   ok(near(paymentToIncome({ ...inp, ownRentPaid: 6_000 }, 9_500, loanPmt), 9_500 / (25_000 - loanPmt - 6_000), 1e-9), "PTI: rent paid elsewhere reduces disposable income");
   ok(paymentToIncome({ ...inp, monthlyIncome: 5_000, ownRentPaid: 6_000 }, 9_500, loanPmt) === 10, "PTI: no disposable income → clear fail");
+  ok(near(paymentToIncome({ ...inp, ownRentAuto: true }, 9_500, loanPmt, 5_330), 9_500 / (25_000 - loanPmt - 5_330), 1e-9), "PTI: auto own rent = market rent of the apartment rented out");
 }
 
 // Living in the new apartment: rent saved in full, no vacancy, no rent tax
@@ -147,6 +148,9 @@ ok(near(withLoan.realEstate.totalCashInvested, withLoan.sp500.totalCashInvested,
   ok(near(k.realEstate.purchaseTax, 1_600_000 * 0.08, 0.01) && k.realEstate.maxLtv === 0.5, "still additional-apartment tax (8%) and 50% LTV");
   ok(k.realEstate.oldHomeNetProceeds === 0, "the old apartment is not sold");
   ok(!k.realEstate.shevachExempt, "selling the new apartment while owning the old one is not exempt");
+  ok(k.realEstate.housingDifference < 0, "moving into a cheaper apartment counts as worse housing");
+  const same = simulate({ ...DEFAULT_INPUTS, apartmentType: "additional", liveInNew: true, equity: 1_000_000, propertyPrice: 1_600_000, oldHomeValue: 1_600_000 });
+  ok(same.realEstate.housingDifference === 0, "same-value apartments: no housing difference");
 }
 
 // Keep the old apartment, live elsewhere, rent out both: the household shares one exemption ceiling

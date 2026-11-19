@@ -213,7 +213,8 @@ function checkScenario(inp: SimInputs, r: SimResult) {
     managementPct: inp.managementFee,
   };
   const ownRent = inp.apartmentType === "additional" ? 0 : inp.ownRentAuto ? ("auto" as const) : inp.ownRentPaid;
-  const expNet = expectedNetRent(rentBase, inp.rentalYield, ownRent, living, oldCollected, owner);
+  const housingDiff = rentOld ? ((re.propertyPrice - inp.oldHomeValue) * inp.rentalYield) / 1200 : 0;
+  const expNet = expectedNetRent(rentBase, inp.rentalYield, ownRent, living, oldCollected, owner) + housingDiff;
   check(near(re.initialMonthlyRentNet, expNet, 0.01), "month-1 net rent (independent)", ctx);
   const expPmt = tracks.firstPayment;
   const expLoanPmt = inp.loanEnabled ? spitzerPayment(inp.loanAmount, inp.loanRate, inp.loanTerm) : 0;

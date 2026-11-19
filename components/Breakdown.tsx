@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { SimResult } from "@/lib/calculator";
 import { formatILS } from "@/lib/format";
+import Sources from "./Sources";
 
 type Cell = number | string | null;
 interface Line {
@@ -75,7 +76,13 @@ export default function Breakdown({ result }: { result: SimResult }) {
           negative: true,
           note: result.inputs.useBroker ? "תיווך, עו״ד, מע״מ, שמאי, יועץ" : "עו״ד, מע״מ, שמאי, יועץ",
         },
-        { label: "ריבית משכנתא ששולמה", re: re.totalInterestPaid, sp: null, negative: true, note: "כלולה בהחזרים החודשיים" },
+        {
+          label: result.inputs.cpiShare > 0 ? "ריבית והצמדה על המשכנתא" : "ריבית משכנתא ששולמה",
+          re: re.totalInterestPaid,
+          sp: null,
+          negative: true,
+          note: "כלולה בהחזרים החודשיים",
+        },
         ...(loan || sp.loanPrincipal > 0
           ? [
               {
@@ -92,7 +99,28 @@ export default function Breakdown({ result }: { result: SimResult }) {
         ...(re.livesInNew
           ? []
           : [{ label: "חודשים פנויים", re: re.totalVacancyLoss, sp: null, negative: true, note: "חודש אחד בשנה" } as Line]),
-        { label: "תחזוקה וביטוחים", re: re.totalOwnershipCosts, sp: null, negative: true, note: "8% מהשכירות + ביטוח מבנה וחיים" },
+        { label: "תחזוקה שוטפת", re: re.totalMaintenance, sp: null, negative: true, note: "8% משכר הדירה" },
+        { label: "רזרבה לשיפוצים", re: re.totalCapex, sp: null, negative: true, note: `${result.inputs.capexRate}% משווי הדירה בשנה` },
+        ...(re.totalVacancyCosts > 0.5
+          ? [{ label: "ועד בית וארנונה בחודשים פנויים", re: re.totalVacancyCosts, sp: null, negative: true } as Line]
+          : []),
+        ...(re.totalManagement > 0.5
+          ? [{ label: "דמי ניהול", re: re.totalManagement, sp: null, negative: true, note: `${result.inputs.managementFee}% משכר הדירה` } as Line]
+          : []),
+        { label: "ביטוח מבנה וחיים", re: re.totalInsurance, sp: null, negative: true, note: "ביטוח החיים יורד עם יתרת המשכנתא" },
+        ...(re.rentsOutOld
+          ? [
+              {
+                label: "הפרש בשווי המגורים",
+                re: re.housingDifference,
+                sp: null,
+                note: "גרים בדירה החדשה במקום בישנה, לפי שכר הדירה של כל אחת",
+              } as Line,
+            ]
+          : []),
+        ...(re.renewalIncomeLost > 0.5
+          ? [{ label: "הכנסה שאבדה בזמן ההתחדשות", re: re.renewalIncomeLost, sp: null, negative: true, note: "3 שנות בנייה" } as Line]
+          : []),
         ...(re.livesInNew
           ? []
           : [
@@ -146,6 +174,20 @@ export default function Breakdown({ result }: { result: SimResult }) {
           negative: true,
           note: result.inputs.useBroker ? "תיווך 2% + עו״ד 0.5% + מע״מ" : "עו״ד 0.5% + מע״מ",
         },
+        ...(re.sellDelayCost > 0.5
+          ? [
+              {
+                label: "חודשים עד המכירה",
+                re: re.sellDelayCost,
+                sp: null,
+                negative: true,
+                note: `${result.inputs.monthsToSell} חודשים בלי שוכר, עם ועד בית וארנונה`,
+              } as Line,
+            ]
+          : []),
+        ...(re.renewalLevy > 0.5
+          ? [{ label: "היטל השבחה", re: re.renewalLevy, sp: null, negative: true, note: "25% מתוספת השווי מההתחדשות" } as Line]
+          : []),
         {
           label: "מס שבח",
           re: re.shevachExempt ? "פטור (דירה יחידה)" : re.shevachTax,
@@ -155,14 +197,16 @@ export default function Breakdown({ result }: { result: SimResult }) {
             ? "חלקי: מחיר המכירה מעל תקרת הפטור"
             : re.shevachExempt
               ? undefined
-              : "25% על הרווח הריאלי",
+              : re.depreciationDeducted > 0.5
+                ? `25% על הרווח הריאלי, כולל פחת רעיוני של ${formatILS(re.depreciationDeducted)}`
+                : "25% על הרווח הריאלי",
         },
         {
           label: "מס רווחי הון (25%)",
           re: re.sideFundTax > 0.5 ? re.sideFundTax : null,
           sp: sp.capitalGainsTax,
           negative: true,
-          note: sp.vehicle === "irish" ? "ETF אירי: על הרווח הנומינלי בשקלים" : "על הרווח הריאלי",
+          note: sp.vehicle === "irish" ? "ETF אירי: על הרווח מעל שער הדולר" : "על הרווח הריאלי",
         },
         {
           label: "מס יסף (5%)",
@@ -233,9 +277,11 @@ export default function Breakdown({ result }: { result: SimResult }) {
           </table>
           <p className="mt-3 px-2 text-[11px] leading-relaxed text-slate-400">
             הנחות: מדרגות מס רכישה הקפואות עד 15.1.2028 · תקרות המס קפואות עד סוף 2027 וצמודות למדד אחר כך · מכירה בשנה אחת
-            ובלי הכנסות נוספות באותה שנה (לצורך מס יסף) · לא כולל פחת רעיוני שרשות המסים מנכה בדירה מושכרת · אינפלציה{" "}
-            {result.inputs.inflation}% בשנה.
+            ובלי הכנסות נוספות באותה שנה (לצורך מס יסף) ·{" "}
+            {result.inputs.depreciation ? "כולל פחת רעיוני (לפי בחירתכם)" : "בלי פחת רעיוני (אפשר להוסיף בהגדרות המתקדמות)"} ·
+            אינפלציה {result.inputs.inflation}% בשנה · כל הסכומים בשקלים של אותה שנה.
           </p>
+          <Sources ids={["purchaseTax", "rentTax", "shevach", "surtax", "sp500Tax", "boi329"]} className="mt-2 px-2" />
         </div>
       )}
     </div>

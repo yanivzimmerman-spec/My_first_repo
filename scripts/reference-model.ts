@@ -182,7 +182,9 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
       50 * cpiY +
       (100 * balStart) / 1e6 +
       rentElsewhere;
-    const netRent = received - rentTax - running;
+    // moving into the new apartment: the S&P track lives in the old one, so count the housing difference
+    const housing = rentOld ? (((price - x.oldHomeValue) * x.rentalYield) / 1200) * growth : 0;
+    const netRent = received - rentTax - running + housing;
 
     const apartmentOut = mortPay(m) + dpLoan.paymentIn(m) - netRent;
     const spOut = spLoan.paymentIn(m);

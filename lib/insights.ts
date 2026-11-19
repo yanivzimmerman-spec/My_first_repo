@@ -49,8 +49,8 @@ export function topReasons(r: SimResult): Reason[] {
       amount: re.totalVacancyLoss + re.totalOwnershipCosts + re.totalRentTax,
       text: (f) =>
         re.livesInNew
-          ? `תחזוקה וביטוח עלו ${f(re.totalOwnershipCosts)}.`
-          : `חודשים פנויים, תחזוקה, ביטוח ומס על השכירות הורידו ${f(re.totalVacancyLoss + re.totalOwnershipCosts + re.totalRentTax)} מהשכירות.`,
+          ? `תחזוקה, שיפוצים וביטוח עלו ${f(re.totalOwnershipCosts)}.`
+          : `תחזוקה, שיפוצים, ביטוח, חודשים פנויים ומס על השכירות עלו ${f(re.totalVacancyLoss + re.totalOwnershipCosts + re.totalRentTax)}.`,
     },
   ];
 

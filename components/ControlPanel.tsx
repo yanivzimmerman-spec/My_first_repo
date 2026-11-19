@@ -5,6 +5,8 @@ import { ChevronDown, AlertTriangle } from "lucide-react";
 import { BOUNDS, MIN_START_CAPITAL, PTI_MAX, PTI_WARN, type ApartmentType, type SimInputs, type SimResult } from "@/lib/calculator";
 import { formatCompactILS, formatILS, formatPct } from "@/lib/format";
 import SliderInput from "./SliderInput";
+import Sources from "./Sources";
+import { RISK_PROFILES, matchRiskProfile } from "@/lib/presets";
 import { Segmented, Switch } from "./Toggle";
 
 const RE = "var(--accent-re)";
@@ -80,6 +82,56 @@ function AddOn({
   );
 }
 
+/** "How conservative are you?" — one control that sets the assumptions about the future for both tracks. */
+function RiskMeter({ inputs, set }: { inputs: SimInputs; set: Props["set"] }) {
+  const current = matchRiskProfile(inputs);
+  const choose = (i: number) => {
+    const v = RISK_PROFILES[i].values;
+    set("appreciation", v.appreciation);
+    set("rentGrowth", v.rentGrowth);
+    set("spReturn", v.spReturn);
+    set("fxDrift", v.fxDrift);
+  };
+  return (
+    <div>
+      <div role="radiogroup" aria-label="כמה אתם שמרנים" className="grid grid-cols-5 gap-1">
+        {RISK_PROFILES.map((p, i) => {
+          const active = i === current;
+          return (
+            <button
+              key={p.label}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={p.label}
+              onClick={() => choose(i)}
+              className={`h-2.5 rounded-full transition ${active ? "ring-2 ring-offset-2 ring-slate-900 ring-offset-white" : "opacity-60 hover:opacity-100"}`}
+              style={{ background: ["#0EA5E9", "#38BDF8", "#94A3B8", "#FB923C", "#F97316"][i] }}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-2 flex justify-between text-[12px] text-slate-500">
+        <span>שמרן</span>
+        <span>אופטימי</span>
+      </div>
+      <p className="mt-3 text-[13px] leading-relaxed text-slate-600">
+        {current >= 0 ? (
+          <>
+            <span className="font-semibold text-slate-900">{RISK_PROFILES[current].label}:</span> {RISK_PROFILES[current].description}.
+          </>
+        ) : (
+          <>
+            <span className="font-semibold text-slate-900">מותאם אישית:</span> שיניתם את ההנחות ידנית. לחצו על אחת הנקודות כדי
+            לחזור לפרופיל.
+          </>
+        )}{" "}
+        ההנחות חלות על שני המסלולים, ואפשר לכוונן כל אחת בנפרד למטה.
+      </p>
+    </div>
+  );
+}
+
 export default function ControlPanel({ inputs, result, set }: Props) {
   const [advanced, setAdvanced] = useState(false);
   const re = result.realEstate;
@@ -96,7 +148,10 @@ export default function ControlPanel({ inputs, result, set }: Props) {
     max: Math.floor((rentBase * BOUNDS.rentalYield.max) / 1200 / 50) * 50,
     step: 50,
   };
-  const futureValue = price * Math.pow(1 + inputs.appreciation / 100, inputs.years);
+  const futureValue = price * Math.pow(1 + (inputs.appreciation - inputs.ageDrag) / 100, inputs.years);
+  const shekelReturn = ((1 + inputs.spReturn / 100) * (1 + inputs.fxDrift / 100) - 1) * 100;
+  // Renting out your only apartment while living in a rental → own-rent deduction on the 10% track
+  const sellsOwnRentDeduction = type !== "additional" && !re.livesInNew;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
@@ -116,6 +171,16 @@ export default function ControlPanel({ inputs, result, set }: Props) {
             ]}
           />
           <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{TYPE_TEXT[type]}</p>
+          <Sources
+            ids={
+              type === "single"
+                ? ["purchaseTax", "shevach", "boi329"]
+                : type === "upgrader"
+                  ? ["purchaseTax", "upgrader", "boi329"]
+                  : ["purchaseTax", "freezeLaw", "boi329"]
+            }
+            className="mt-2"
+          />
         </div>
 
         <div>
@@ -152,7 +217,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               ? inputs.liveElsewhere
                 ? "משכירים את שתי הדירות. הדירה הישנה מושכרת גם במסלול ה-S&P, אבל תקרת הפטור על שכירות משותפת לשתיהן, ולכן הדירה החדשה מוסיפה מס."
                 : inputs.liveInNew
-                  ? "עוברים לדירה החדשה ומשכירים את הישנה. במסלול ה-S&P ממשיכים לגור בדירה הישנה."
+                  ? "עוברים לדירה החדשה ומשכירים את הישנה. במסלול ה-S&P ממשיכים לגור בדירה הישנה, ולכן ההבדל בשווי המגורים בין הדירות נכלל בחישוב."
                   : "ממשיכים לגור בדירה הישנה ומשכירים את החדשה."
               : inputs.liveInNew
                 ? "גרים בדירה החדשה: במקום לקבל שכר דירה, חוסכים את השכירות. במסלול ה-S&P גרים בשכירות."
@@ -207,6 +272,9 @@ export default function ControlPanel({ inputs, result, set }: Props) {
                 hint="אפס במסלול פריים. במסלולים קבועים יכולה להגיע לאחוזים מהיתרה. הבנק נותן את הסכום המדויק."
               />
             )}
+            {inputs.oldHomeMortgage > 0 && (
+              <Sources ids={["prepay"]} className="-mt-3" />
+            )}
             <div>
               <label className="flex cursor-pointer items-center justify-between gap-3">
                 <span className="text-[15px] text-slate-700">מוכרים לפני שקונים</span>
@@ -260,7 +328,12 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         />
       </Group>
 
-      {/* ---------------- 3. The new apartment ---------------- */}
+      {/* ---------------- 3. Assumptions about the future ---------------- */}
+      <Group title="כמה אתם שמרנים?">
+        <RiskMeter inputs={inputs} set={set} />
+      </Group>
+
+      {/* ---------------- 4. The new apartment ---------------- */}
       <Group title="הדירה החדשה" color={RE}>
         <div>
           <SliderInput
@@ -297,38 +370,68 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         </div>
 
         <SliderInput
-          label="ריבית משכנתא"
-          kind="percent"
-          value={inputs.mortgageRate}
-          bound={BOUNDS.mortgageRate}
+          label="תקופת המשכנתא"
+          kind="years"
+          value={inputs.mortgageTerm}
+          bound={BOUNDS.mortgageTerm}
           accent={RE}
-          onChange={(v) => set("mortgageRate", v)}
-          hint="ממוצע לכל המסלולים. ב-2026: קבועה לא צמודה כ-4.6%, משתנה כ-4.4%. לפחות שליש מהמשכנתא חייב להיות בריבית קבועה."
+          onChange={(v) => set("mortgageTerm", Math.round(v))}
+          hint="תקופה ארוכה = החזר חודשי נמוך יותר, אבל ריבית גבוהה יותר וסך ריבית גדול יותר. עד 30 שנה."
         />
 
-        <SliderInput
-          label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : re.rentsOutOld ? "שכר דירה על הדירה הישנה" : re.rentsOutBoth ? "שכר דירה על הדירה החדשה" : "שכר דירה חודשי"}
-          kind="currency"
-          value={Math.round(rent / 10) * 10}
-          bound={rentBound}
-          accent={RE}
-          onChange={(v) => set("rentalYield", Math.min(BOUNDS.rentalYield.max, Math.max(BOUNDS.rentalYield.min, (v * 1200) / rentBase)))}
-          hint={
-            <>
-              {re.livesInNew ? (
+        <div>
+          <SliderInput
+            label="ריבית משכנתא"
+            kind="percent"
+            value={inputs.mortgageRate}
+            bound={BOUNDS.mortgageRate}
+            accent={RE}
+            disabled={inputs.autoRate}
+            onChange={(v) => set("mortgageRate", v)}
+            hint={
+              inputs.autoRate
+                ? `כלל אצבע לתקופה של ${inputs.mortgageTerm} שנה: כ-4.3% ל-10 שנים ועוד 0.03% לכל שנה נוספת.`
+                : "ממוצע לכל המסלולים. ב-2026: קבועה לא צמודה כ-4.6%, משתנה כ-4.4%."
+            }
+          />
+          <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 text-[13px] text-slate-600">
+            <span>ריבית לפי התקופה (כלל אצבע)</span>
+            <Switch label="ריבית לפי התקופה" checked={inputs.autoRate} onChange={(v) => set("autoRate", v)} accent={RE} />
+          </label>
+        </div>
+
+        <div>
+          <SliderInput
+            label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : re.rentsOutOld ? "שכר דירה על הדירה הישנה" : re.rentsOutBoth ? "שכר דירה על הדירה החדשה" : "שכר דירה חודשי"}
+            kind="currency"
+            value={Math.round(rent / 10) * 10}
+            bound={rentBound}
+            accent={RE}
+            onChange={(v) => set("rentalYield", Math.min(BOUNDS.rentalYield.max, Math.max(BOUNDS.rentalYield.min, (v * 1200) / rentBase)))}
+            hint={
+              re.livesInNew ? (
                 <>
-                  זה מה שהייתם משלמים בשכירות. אחרי תחזוקה וביטוח, אתם חוסכים בערך{" "}
+                  זה מה שהייתם משלמים בשכירות. אחרי תחזוקה, שיפוצים וביטוח, אתם חוסכים בערך{" "}
                   <span className="font-semibold text-slate-800">{formatILS(re.initialMonthlyRentNet)}</span> בחודש
                 </>
               ) : (
                 <>
-                  אחרי חודש פנוי בשנה, תחזוקה, ביטוח ומס, נשארים לכם בערך{" "}
+                  אחרי חודש פנוי בשנה, תחזוקה, שיפוצים, ביטוח ומס, נשארים לכם בערך{" "}
                   <span className="font-semibold text-slate-800">{formatILS(re.initialMonthlyRentNet)}</span> בחודש
+                  {sellsOwnRentDeduction && (
+                    <>
+                      . אם אתם גרים בשכירות, שכר הדירה שאתם משלמים מקוזז ממס השכירות במסלול 10% (עד ₪90,000 בשנה). כלל
+                      אצבע: בערך כמו שכר הדירה שתקבלו
+                    </>
+                  )}
                 </>
-              )}
-            </>
-          }
-        />
+              )
+            }
+          />
+          {!re.livesInNew && (
+            <Sources ids={sellsOwnRentDeduction ? ["rentTax", "ownRentDeduction"] : ["rentTax"]} className="mt-2" />
+          )}
+        </div>
 
         <SliderInput
           label="בכמה יעלו מחירי הדירות בשנה?"
@@ -338,21 +441,39 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           bound={BOUNDS.appreciation}
           accent={RE}
           onChange={(v) => set("appreciation", v)}
-          hint={`בעוד ${inputs.years} שנה הדירה תהיה שווה כ-${formatCompactILS(futureValue)}`}
+          hint={`בעוד ${inputs.years} שנה הדירה תהיה שווה כ-${formatCompactILS(futureValue)}. ב-25 השנים האחרונות: כ-4.7% בשנה בממוצע.`}
         />
       </Group>
 
       <Group title="S&P 500" color={SP}>
         <SliderInput
-          label="תשואה שנתית ממוצעת"
+          label="תשואה שנתית בדולרים"
           kind="percent"
           decimals={1}
           value={inputs.spReturn}
           bound={BOUNDS.spReturn}
           accent={SP}
           onChange={(v) => set("spReturn", v)}
-          hint="בעבר: כ-9.5% בשנה בדולרים, כ-8.5% עד 9% בשקלים. לא מובטח."
+          hint="ממוצע היסטורי: כ-9.5% עד 10% בשנה בדולרים, כולל דיבידנדים. לא מובטח."
         />
+        <div>
+          <SliderInput
+            label="שינוי שנתי בשער הדולר"
+            kind="percent"
+            decimals={1}
+            value={inputs.fxDrift}
+            bound={BOUNDS.fxDrift}
+            accent={SP}
+            onChange={(v) => set("fxDrift", v)}
+            hint={
+              <>
+                מינוס = הדולר נחלש מול השקל. ב-20 השנים האחרונות כ-1.5%- בשנה. תשואה בשקלים:{" "}
+                <span className="font-semibold text-slate-800">{formatPct(shekelReturn, 1)}</span> לפני דמי ניהול
+              </>
+            }
+          />
+          <Sources ids={["sp500Tax", "surtax"]} className="mt-2" />
+        </div>
       </Group>
 
       {/* ---------------- Optional add-ons ---------------- */}
@@ -416,6 +537,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               מההכנסה.
             </span>
           </p>
+          <Sources ids={["boiQA"]} />
         </AddOn>
 
         <AddOn
@@ -459,6 +581,85 @@ export default function ControlPanel({ inputs, result, set }: Props) {
           </p>
         </AddOn>
         <AddOn
+          title="מסלולי משכנתא"
+          accent={RE}
+          checked={inputs.cpiShare > 0 || inputs.variableShare > 0}
+          onChange={(v) => {
+            set("cpiShare", v ? 33 : 0);
+            set("variableShare", v ? 33 : 0);
+            if (!v) set("rateShock", 0);
+          }}
+          description="במקום ריבית אחת: חלק צמוד למדד וחלק בריבית משתנה, כמו בתמהיל אמיתי. לפחות שליש חייב להיות בריבית קבועה."
+        >
+          <SliderInput
+            label="חלק צמוד למדד"
+            kind="percent"
+            decimals={0}
+            value={inputs.cpiShare}
+            bound={{ ...BOUNDS.cpiShare, max: 100 - inputs.variableShare }}
+            accent={RE}
+            onChange={(v) => set("cpiShare", Math.round(v))}
+            hint="הקרן וההחזר עולים עם האינפלציה. כשהאינפלציה גבוהה, המשכנתא יקרה יותר."
+          />
+          <SliderInput
+            label="ריבית במסלול הצמוד (מעל האינפלציה)"
+            kind="percent"
+            value={inputs.cpiRealRate}
+            bound={BOUNDS.cpiRealRate}
+            accent={RE}
+            disabled={inputs.autoRate}
+            onChange={(v) => set("cpiRealRate", v)}
+            hint={inputs.autoRate ? "לפי כלל אצבע: כ-1.45% פחות מהריבית הלא צמודה" : "ב-2026 כ-3.3% מעל האינפלציה"}
+          />
+          <SliderInput
+            label="חלק בריבית משתנה (פריים)"
+            kind="percent"
+            decimals={0}
+            value={inputs.variableShare}
+            bound={{ ...BOUNDS.variableShare, max: Math.min(65, 100 - inputs.cpiShare) }}
+            accent={RE}
+            onChange={(v) => set("variableShare", Math.round(v))}
+          />
+          <SliderInput
+            label="שינוי בריבית המשתנה משנה 2"
+            kind="percent"
+            value={inputs.rateShock}
+            bound={BOUNDS.rateShock}
+            accent={RE}
+            onChange={(v) => set("rateShock", v)}
+            hint="לדוגמה +2: הפריים עולה ב-2% אחרי השנה הראשונה ונשאר כך. ב-2022–2023 הוא עלה בכ-3%."
+          />
+        </AddOn>
+
+        <AddOn
+          title="התחדשות עירונית"
+          accent={RE}
+          checked={inputs.urbanRenewal}
+          onChange={(v) => set("urbanRenewal", v)}
+          description="תמ״א 38 או פינוי-בינוי: הדירה שווה יותר בסוף, אבל אין ממנה הכנסה בזמן הבנייה ויש היטל השבחה."
+        >
+          <SliderInput
+            label="תוספת לשווי הדירה"
+            kind="percent"
+            decimals={0}
+            value={inputs.renewalUplift}
+            bound={BOUNDS.renewalUplift}
+            accent={RE}
+            onChange={(v) => set("renewalUplift", Math.round(v))}
+            hint="אין נתון ממוצע אמין. הערכה שמרנית: 15% עד 25%."
+          />
+          <SliderInput
+            label="בעוד כמה שנים הפרויקט יושלם"
+            kind="years"
+            value={inputs.renewalYear}
+            bound={{ ...BOUNDS.renewalYear, max: Math.max(BOUNDS.renewalYear.min, inputs.years) }}
+            accent={RE}
+            onChange={(v) => set("renewalYear", Math.round(v))}
+            hint="כלל אצבע: 3 שנים בלי הכנסה בזמן הבנייה, והיטל השבחה של 25% מהתוספת בשווי."
+          />
+        </AddOn>
+
+        <AddOn
           title="לבדוק אם הבנק יאשר"
           accent="var(--accent-ink)"
           checked={inputs.incomeCheck}
@@ -491,6 +692,7 @@ export default function ControlPanel({ inputs, result, set }: Props) {
                   : "עד 40%: סביר שהבנק יאשר."}
             </p>
           )}
+          <Sources ids={["boi329"]} />
         </AddOn>
       </Group>
 
@@ -504,21 +706,45 @@ export default function ControlPanel({ inputs, result, set }: Props) {
         >
           <span>
             הגדרות מתקדמות
-            <span className="mr-2 font-normal text-slate-400">תקופת משכנתא, עמלות, מיסוי ואינפלציה</span>
+            <span className="mr-2 font-normal text-slate-400">שיפוצים, עלויות, מכירה, השקעה ואינפלציה</span>
           </span>
           <ChevronDown size={16} className={`transition-transform ${advanced ? "rotate-180" : ""}`} />
         </button>
         {advanced && (
           <div className="space-y-6 px-5 pb-6 sm:px-6">
+            <p className="text-[12px] font-semibold text-slate-400">עלויות הבעלות</p>
             <SliderInput
-              label="תקופת המשכנתא"
-              kind="years"
-              value={inputs.mortgageTerm}
-              bound={BOUNDS.mortgageTerm}
+              label="רזרבה לשיפוצים והחלפות (משווי הדירה בשנה)"
+              kind="percent"
+              value={inputs.capexRate}
+              bound={BOUNDS.capexRate}
               accent={RE}
-              onChange={(v) => set("mortgageTerm", Math.round(v))}
-              hint="עד 30 שנה"
+              onChange={(v) => set("capexRate", v)}
+              hint="מעבר לתחזוקה השוטפת (8% משכר הדירה): מזגן, דוד, מטבח, צבע. מחשבונים בעולם: כ-1%."
             />
+            {!re.livesInNew && (
+              <SliderInput
+                label="ועד בית וארנונה בחודש שהדירה ריקה"
+                kind="currency"
+                value={inputs.vacancyOwnerCost}
+                bound={BOUNDS.vacancyOwnerCost}
+                accent={RE}
+                onChange={(v) => set("vacancyOwnerCost", v)}
+                hint="בחודש בלי שוכר הבעלים משלם. ההנחה בארנונה לדירה ריקה ניתנת פעם אחת ובתנאים."
+              />
+            )}
+            {!re.livesInNew && (
+              <SliderInput
+                label="דמי ניהול לדירה (משכר הדירה)"
+                kind="percent"
+                decimals={0}
+                value={inputs.managementFee}
+                bound={BOUNDS.managementFee}
+                accent={RE}
+                onChange={(v) => set("managementFee", Math.round(v))}
+                hint="חברת ניהול גובה 6% עד 15%. גם אם אתם מנהלים לבד, זה מחיר הזמן שלכם."
+              />
+            )}
             <div>
               <label className="flex cursor-pointer items-center justify-between gap-3">
                 <span className="text-[15px] text-slate-700">קנייה ומכירה דרך מתווך</span>
@@ -529,6 +755,8 @@ export default function ControlPanel({ inputs, result, set }: Props) {
                 לשמאי, יועץ משכנתאות ועמלות.
               </p>
             </div>
+
+            <p className="pt-2 text-[12px] font-semibold text-slate-400">הדירה לאורך זמן</p>
             <SliderInput
               label="עליית שכר הדירה בשנה"
               kind="percent"
@@ -537,29 +765,67 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               bound={BOUNDS.rentGrowth}
               accent={RE}
               onChange={(v) => set("rentGrowth", v)}
+              hint="ב-2026: כ-2.8% לשוכרים ממשיכים וכ-5.5% לשוכרים חדשים."
             />
-            {re.rentsOutBoth && (
+            <SliderInput
+              label="ירידת ערך בגלל גיל הבניין"
+              kind="percent"
+              value={inputs.ageDrag}
+              bound={BOUNDS.ageDrag}
+              accent={RE}
+              onChange={(v) => set("ageDrag", v)}
+              hint="דירה ספציפית מתיישנת ועולה מעט פחות מהמדד. 0 = עולה בדיוק כמו המדד."
+            />
+            {!re.livesInNew && !re.rentsOutOld && (
               <SliderInput
-                label="שכר דירה שאתם משלמים בעצמכם"
-                kind="currency"
-                value={inputs.ownRentPaid}
-                bound={BOUNDS.ownRentPaid}
+                label="כמה חודשים לוקח למכור"
+                kind="years"
+                value={inputs.monthsToSell}
+                bound={BOUNDS.monthsToSell}
                 accent={RE}
-                onChange={(v) => set("ownRentPaid", v)}
-                hint="משמש רק לבדיקת אישור הבנק. עם שתי דירות אין קיזוז של שכר הדירה במס. 0 = לא משלמים (למשל גרים אצל המשפחה)."
+                onChange={(v) => set("monthsToSell", Math.round(v))}
+                hint="ב-2026: 3.5 עד 4.5 חודשים בממוצע. בזמן הזה הדירה ריקה והבעלים משלם את ההוצאות."
               />
             )}
-            {type !== "additional" && !re.livesInNew && (
-              <SliderInput
-                label="שכר דירה שאתם משלמים בעצמכם"
-                kind="currency"
-                value={inputs.ownRentPaid}
-                bound={BOUNDS.ownRentPaid}
-                accent={RE}
-                onChange={(v) => set("ownRentPaid", v)}
-                hint="אם אתם גרים בשכירות ומשכירים את הדירה היחידה שלכם, מותר לקזז את שכר הדירה שאתם משלמים (עד ₪90,000 בשנה) במסלול 10%. 0 = לא רלוונטי."
-              />
+            {type === "additional" && !re.rentsOutOld && (
+              <div>
+                <label className="flex cursor-pointer items-center justify-between gap-3">
+                  <span className="text-[15px] text-slate-700">פחת רעיוני במס שבח</span>
+                  <Switch label="פחת רעיוני" checked={inputs.depreciation} onChange={(v) => set("depreciation", v)} accent={RE} />
+                </label>
+                <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+                  רשות המסים מנכה פחת של 2% בשנה מחלק המבנה בדירה מושכרת, ולכן מס השבח גבוה יותר. הנושא שנוי במחלוקת בבית
+                  המשפט.
+                </p>
+              </div>
             )}
+
+            {(sellsOwnRentDeduction || re.rentsOutBoth) && (
+              <>
+                <p className="pt-2 text-[12px] font-semibold text-slate-400">איפה אתם גרים</p>
+                <label className="flex cursor-pointer items-center justify-between gap-3">
+                  <span className="text-[15px] text-slate-700">שכר הדירה שלי בערך כמו שכר הדירה שאקבל</span>
+                  <Switch label="שכר דירה אוטומטי" checked={inputs.ownRentAuto} onChange={(v) => set("ownRentAuto", v)} accent={RE} />
+                </label>
+                {!inputs.ownRentAuto && (
+                  <SliderInput
+                    label="שכר דירה שאתם משלמים בעצמכם"
+                    kind="currency"
+                    value={inputs.ownRentPaid}
+                    bound={BOUNDS.ownRentPaid}
+                    accent={RE}
+                    onChange={(v) => set("ownRentPaid", v)}
+                    hint={
+                      re.rentsOutBoth
+                        ? "משמש לבדיקת אישור הבנק. עם שתי דירות אין קיזוז במס. 0 = לא משלמים (למשל גרים אצל המשפחה)."
+                        : "מקוזז ממס השכירות במסלול 10% (עד ₪90,000 בשנה) ומשמש לבדיקת אישור הבנק. 0 = לא משלמים."
+                    }
+                  />
+                )}
+              </>
+            )}
+
+            <p className="pt-2 text-[12px] font-semibold text-slate-400">ההשקעה במדד</p>
             <div>
               <p className="mb-2 text-[15px] text-slate-700">איך משקיעים ב-S&P 500?</p>
               <Segmented
@@ -574,9 +840,11 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               />
               <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
                 {inputs.spVehicle === "israeli"
-                  ? "מס 25% רק על הרווח שמעל האינפלציה. שימו לב: בחלק מהקרנות המחקות המס צמוד לדולר ולא למדד, וזה כתוב בתשקיף."
-                  : "מס 25% על כל הרווח בשקלים (צמוד לדולר, כאן בהנחה שהשער לא משתנה)."}
+                  ? "מס 25% רק על הרווח שמעל האינפלציה. בחלק מהקרנות המחקות המס צמוד לדולר ולא למדד, וזה כתוב בתשקיף."
+                  : "מס 25% על הרווח מעל שער הדולר: אם הדולר נחלש, משלמים מס גם על רווח שלא קיבלתם בשקלים."}{" "}
+                אפשרות נוספת: קופת גמל להשקעה, שבה המס נדחה עד המשיכה.
               </p>
+              <Sources ids={["sp500Tax"]} className="mt-2" />
             </div>
             <SliderInput
               label="דמי ניהול"
@@ -593,8 +861,9 @@ export default function ControlPanel({ inputs, result, set }: Props) {
               value={inputs.inflation}
               bound={BOUNDS.inflation}
               onChange={(v) => set("inflation", v)}
-              hint="יעד בנק ישראל 1% עד 3%. התחזית ל-2027: כ-2%"
+              hint="יעד בנק ישראל 1% עד 3%. התחזית ל-2027: כ-2%."
             />
+            <Sources ids={["inflation"]} className="-mt-3" />
           </div>
         )}
       </section>

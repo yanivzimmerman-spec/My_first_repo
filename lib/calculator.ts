@@ -375,6 +375,8 @@ export interface RealEstateSummary {
   totalCapex: number;
   totalInsurance: number;
   renewalIncomeLost: number;
+  /** Move-in-and-rent-old mode: value of the new home's housing minus the old one's (rent terms) */
+  housingDifference: number;
   renewalLevy: number;
   sellDelayCost: number;
   depreciationDeducted: number;
@@ -633,12 +635,18 @@ export function purchaseCash(inputs: SimInputs): number {
  * apartment is not counted (banks recognise only part of it, case by case).
  * Returns 10 (a clear fail) when disposable income is zero or negative.
  */
-export function paymentToIncome(inputs: SimInputs, mortgagePayment: number, otherLoanPayment: number): number {
+export function paymentToIncome(
+  inputs: SimInputs,
+  mortgagePayment: number,
+  otherLoanPayment: number,
+  /** Market rent of the apartment rented out; used as the buyer's own rent when ownRentAuto is on */
+  marketRent = 0,
+): number {
   const otherLoans = inputs.loanEnabled && inputs.loanTerm * 12 > 18 ? otherLoanPayment : 0;
   // Rent paid elsewhere reduces disposable income whenever the buyer doesn't live in the purchased apartment
   const livesInPurchased = livesInNew(inputs) || rentsOutOld(inputs);
   const livesInOwnOld = inputs.apartmentType === "additional" && !inputs.liveInNew && !inputs.liveElsewhere;
-  const rentPaid = livesInPurchased || livesInOwnOld ? 0 : inputs.ownRentPaid;
+  const rentPaid = livesInPurchased || livesInOwnOld ? 0 : inputs.ownRentAuto ? marketRent : inputs.ownRentPaid;
   const disposable = inputs.monthlyIncome - otherLoans - rentPaid;
   return disposable > 0 ? mortgagePayment / disposable : 10;
 }
@@ -761,6 +769,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   let capexTotal = 0;
   let insuranceTotal = 0;
   let renewalIncomeLost = 0;
+  let housingDiffTotal = 0;
   let rentTaxTotal = 0;
   let initialRentGross = 0;
   let initialRentNet = 0;
@@ -948,7 +957,14 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     const capex = building ? 0 : ((inputs.capexRate / 100) * valueAt(m)) / 12;
     const insurance = BUILDING_INSURANCE_MONTHLY * cpiYear + (LIFE_INSURANCE_PER_MILLION * balanceAtStart) / 1e6;
     const ownership = maintenance + vacancyCost + management + capex + insurance + rentElsewhereWhileBuilding;
-    const rentNet = collected - rentTax - ownership;
+    // Moving into the new apartment and renting out the old one: the S&P track keeps living in the
+    // old apartment, so the difference in housing (new rent − old rent) counts too. Moving somewhere
+    // cheaper is a cost; somewhere better is a benefit.
+    const housingDiff = rentsOutOld(inputs)
+      ? (((price - inputs.oldHomeValue) * rentalYield) / 1200) * growth
+      : 0;
+    housingDiffTotal += housingDiff;
+    const rentNet = collected - rentTax - ownership + housingDiff;
     rentGrossTotal += rentGross;
     vacancyTotal += rentGross - collected;
     ownershipTotal += ownership;
@@ -1035,7 +1051,9 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     extraLoanPayment: extraPmt,
     extraLoanInterestPaid: extraInterest,
     extraLoanRemaining: extraBalance,
-    paymentToIncome: inputs.incomeCheck ? paymentToIncome(inputs, firstPayment, extraPmt) : null,
+    paymentToIncome: inputs.incomeCheck
+      ? paymentToIncome(inputs, firstPayment, extraPmt, ((price * rentalYield) / 1200))
+      : null,
     initialMonthlyRentGross: initialRentGross,
     initialMonthlyRentNet: initialRentNet,
     initialMonthlyGap: initialGap,
@@ -1054,6 +1072,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     totalCapex: capexTotal,
     totalInsurance: insuranceTotal,
     renewalIncomeLost,
+    housingDifference: housingDiffTotal,
     renewalLevy: last.levy,
     sellDelayCost: last.sellDelay,
     depreciationDeducted: last.depreciation,
