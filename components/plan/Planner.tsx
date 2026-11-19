@@ -39,6 +39,8 @@ import SliderInput from "../SliderInput";
 import { Switch, Segmented } from "../Toggle";
 import VerdictBanner from "../VerdictBanner";
 import RiskGauges from "../RiskGauges";
+import ComboView from "../ComboView";
+import { comboCurve, type ComboPoint } from "@/lib/combo";
 
 const STEPS = ["מה יש לכם", "מה חשוב לכם", "קודם כל, הבסיס", "דירה או שוק ההון", "התוכנית שלכם", "התייעצות עם AI"] as const;
 
@@ -149,6 +151,13 @@ function Stat({ label, value, note, warn }: { label: string; value: string; note
 /** "−52%" kept in order inside Hebrew text */
 const loss = (share: number) => `\u2066−${formatPct(share * 100, 0)}\u2069`;
 
+/** The most valuable mix when it beats both "all in" options; null otherwise. */
+function bestMix(curve: ComboPoint[]): (ComboPoint & { value: number }) | null {
+  const ok = curve.filter((x): x is ComboPoint & { value: number } => x.value !== null);
+  const best = ok.reduce<(ComboPoint & { value: number }) | null>((a, x) => (!a || x.value > a.value ? x : a), null);
+  return best && best.share > 0 && best.share < 100 ? best : null;
+}
+
 const winnerName = (r: SimResult) => (r.winner === "realEstate" ? "הדירה" : r.winner === "sp500" ? "ה-S&P 500" : null);
 
 export default function Planner() {
@@ -171,8 +180,11 @@ export default function Planner() {
     const price = Math.min(priceOverride ?? range.suggested, range.bankCap);
     const inputs = decisionInputs(profile, b, price);
     const result = simulate(inputs);
+    const curve = comboCurve(inputs, result);
     return {
       range,
+      curve,
+      bestMix: bestMix(curve),
       price,
       inputs,
       result,
@@ -273,6 +285,7 @@ export default function Planner() {
                 </div>
               </section>
               <VerdictBanner result={decision.result} breakEven={decision.be} breakEvenRent={decision.ber} comboLink={false} />
+              <ComboView inputs={decision.inputs} result={decision.result} curve={decision.curve} dark={theme === "dark"} embedded />
               <LeverageCard r={decision.result} lev={decision.lev} b={b} />
               <RiskGauges result={decision.result} />
             </div>
@@ -656,7 +669,12 @@ function StepPlan({
 }: {
   p: Profile;
   b: Basics;
-  decision: { result: SimResult; price: number; be: { value: number | null; below: boolean } } | null;
+  decision: {
+    result: SimResult;
+    price: number;
+    be: { value: number | null; below: boolean };
+    bestMix: (ComboPoint & { value: number }) | null;
+  } | null;
   copied: "idle" | "ok" | "fail";
   onCopy: (text: string) => void;
 }) {
@@ -689,6 +707,11 @@ function StepPlan({
     big = `בחישוב, דירה בסביבות ${c(decision!.price)} עם משכנתא של כ-${c(r.realEstate.loanAmount)} משאירה יותר מהשקעה במדד.`;
   else big = "שני המסלולים קרובים מאוד. אפשר לשלב: חלק בדירה וחלק במדד.";
   steps.push(big);
+  const mix = decision?.bestMix;
+  if (r && mix && mix.value > Math.max(r.realEstate.netWorth, r.sp500.netWorth))
+    steps.push(
+      `שווה לשקול שילוב: בחישוב, ${mix.share}% מהכסף לדירה${mix.price ? ` (דירה בסביבות ${c(mix.price)})` : ""} והשאר במדד משאירים ${c(mix.value)}, יותר משני המסלולים לבד.`,
+    );
 
   const why = r && name ? `לפי ההנחות שלכם, ${name} ${r.winner === "realEstate" ? "משאירה" : "משאיר"} כ-${c(r.difference)} יותר אחרי ${p.years} שנה.` : null;
   const flip =

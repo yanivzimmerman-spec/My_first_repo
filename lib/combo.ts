@@ -1,4 +1,4 @@
-import { simulate, MIN_START_CAPITAL, type SimInputs, type SimResult } from "./calculator";
+import { simulate, MIN_START_CAPITAL, type SimInputs, type SimResult } from "./calculator.ts";
 
 export interface ComboPoint {
   /** Share of the starting money that goes to the apartment, 0–100 */

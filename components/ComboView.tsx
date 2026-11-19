@@ -18,9 +18,24 @@ function Card({ title, value, sub, highlight }: { title: string; value: number |
 }
 
 /** Second page (#combo): split the starting money between an apartment and the S&P. */
-export default function ComboView({ inputs, result, dark }: { inputs: SimInputs; result: SimResult; dark: boolean }) {
+export default function ComboView({
+  inputs,
+  result,
+  dark,
+  embedded = false,
+  curve: given,
+}: {
+  inputs: SimInputs;
+  result: SimResult;
+  dark: boolean;
+  /** Inside another page (the planner): no back link, no reference to the main page */
+  embedded?: boolean;
+  /** Precomputed curve, when the caller already has it */
+  curve?: ComboPoint[];
+}) {
   const [share, setShare] = useState(50);
-  const curve = useMemo(() => comboCurve(inputs, result), [inputs, result]);
+  const computed = useMemo(() => given ?? comboCurve(inputs, result), [given, inputs, result]);
+  const curve = computed;
   const chosen = curve.find((p) => p.share === share) ?? curve[0];
   const feasible = curve.filter((p): p is ComboPoint & { value: number } => p.value !== null);
   const best = feasible.reduce((a, b) => (b.value > a.value ? b : a), feasible[0]);
@@ -31,18 +46,20 @@ export default function ComboView({ inputs, result, dark }: { inputs: SimInputs;
 
   return (
     <div className="space-y-5">
-      <a href="#main" className="inline-flex items-center gap-1 text-[14px] font-semibold text-slate-600 hover:text-slate-900">
-        → חזרה לסימולטור
-      </a>
+      {!embedded && (
+        <a href="#main" className="inline-flex items-center gap-1 text-[14px] font-semibold text-slate-600 hover:text-slate-900">
+          → חזרה לסימולטור
+        </a>
+      )}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
         <p className="text-[13px] font-semibold text-slate-500">שילוב בין השניים</p>
-        <h2 className="mt-1 text-2xl font-bold leading-snug text-slate-900 sm:text-[28px]">
+        <h2 className={`mt-1 font-bold leading-snug text-slate-900 ${embedded ? "text-xl" : "text-2xl sm:text-[28px]"}`}>
           חלק מהכסף לדירה, וחלק ל-S&P 500
         </h2>
         <p className="mt-2 max-w-[65ch] text-[14px] leading-relaxed text-slate-600">
           במקום לבחור אחד, אפשר לקנות דירה קטנה יותר ולהשקיע את השאר במדד. כל השילובים מקבלים בדיוק אותו כסף: אותם{" "}
-          {formatILS(start)} היום ואותה הוצאה חודשית כמו בקניית הדירה המלאה. מה שלא הולך לדירה מושקע במדד. כל שאר ההנחות
-          לקוחות מהדף הראשי.
+          {formatILS(start)} היום ואותה הוצאה חודשית כמו בקניית הדירה המלאה. מה שלא הולך לדירה מושקע במדד.
+          {embedded ? "" : " כל שאר ההנחות לקוחות מהדף הראשי."}
         </p>
 
         <div className="mt-6">
@@ -66,7 +83,7 @@ export default function ComboView({ inputs, result, dark }: { inputs: SimInputs;
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <Card title="הכול בדירה" value={curve[curve.length - 1].value} sub="כמו בדף הראשי" />
+          <Card title="הכול בדירה" value={curve[curve.length - 1].value} sub={embedded ? "כמו בהשוואה למעלה" : "כמו בדף הראשי"} />
           <Card title={`השילוב שבחרתם (${share}% לדירה)`} value={chosen.value} sub="אחרי כל המסים" highlight />
           <Card title="הכול ב-S&P 500" value={curve[0].value} sub="אותו כסף, הכול במדד" />
         </div>

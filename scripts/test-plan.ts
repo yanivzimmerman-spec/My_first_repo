@@ -146,5 +146,15 @@ ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0,
   ok(bad === 0, "fuzz: 400 random households, finite numbers, price within the bank limit, clean prompt");
 }
 
+// Mix in the prompt
+{
+  const p = P(); const b = basics(p); const price = priceRange(p, b).suggested;
+  const inputs = decisionInputs(p, b, price); const result = simulate(inputs);
+  const d = { price, result, lev: leverage(result, p, b), be: breakEvenAppreciation(inputs) };
+  const top = Math.max(result.realEstate.netWorth, result.sp500.netWorth);
+  ok(advisorPrompt(p, b, { ...d, bestMix: { share: 40, value: top + 50_000, price: 900_000 } }, {}).includes("שילוב: 40% מהכסף לדירה"), "a winning mix appears in the prompt");
+  ok(!advisorPrompt(p, b, { ...d, bestMix: { share: 40, value: top - 1, price: 900_000 } }, {}).includes("שילוב:"), "a mix that doesn't win is left out");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll planner tests passed");

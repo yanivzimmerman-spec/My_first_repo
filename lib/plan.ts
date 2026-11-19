@@ -299,6 +299,8 @@ const ALWAYS_ASK = [
 ];
 
 export interface PromptDecision {
+  /** Best part-apartment / part-index mix, when it beats both */
+  bestMix?: { share: number; value: number; price: number | null } | null;
   price: number;
   result: SimResult;
   lev: Leverage;
@@ -354,6 +356,9 @@ export function advisorPrompt(p: Profile, b: Basics, decision: PromptDecision | 
     calc.push(
       `אחרי ${y} שנה, נטו אחרי מסים ואחרי סילוק המשכנתא: דירה ${mil(re.netWorth)}, S&P 500 ${mil(sp.netWorth)}. ${decision.result.winner === "tie" ? "כמעט תיקו." : `${decision.result.winner === "realEstate" ? "הדירה" : "ה-S&P 500"} מוביל ב-${mil(decision.result.difference)}.`}`,
     );
+    const mix = decision.bestMix;
+    if (mix && mix.value > Math.max(re.netWorth, sp.netWorth))
+      calc.push(`שילוב: ${mix.share}% מהכסף לדירה${mix.price ? ` (דירה ב-${mil(mix.price)})` : ""} והשאר במדד מגיעים ל-${mil(mix.value)}, יותר משני המסלולים לבד.`);
     if (decision.be.value !== null) calc.push(`נקודת האיזון: הדירה מנצחת אם מחירי הדירות עולים ביותר מ-${decision.be.value.toFixed(1)}% בשנה.`);
     calc.push(`אם מחירי הדירות יורדים 15%, נמחקים כ-${pct(decision.lev.aptDropLoss)} מההון שלי. ירידה של 35% במדד מוחקת ${pct(decision.lev.spDropLoss)}.`);
   } else {
