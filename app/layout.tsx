@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   title: "נדל״ן מול סנופי | סימולטור דירה להשקעה מול S&P 500",
   description:
     "סימולטור 'מה אם' ישראלי: השוואת שווי נטו בין דירה להשקעה במינוף משכנתא לבין השקעה במדד S&P 500 — כולל מס רכישה, מס שבח, מס שכירות ומס רווחי הון ריאלי.",
+  // Private test site: keep it out of search engines (public/robots.txt says the same)
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
