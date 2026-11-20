@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import type { Bound } from "@/lib/calculator";
 import { formatNumber, parseLooseNumber } from "@/lib/format";
@@ -47,10 +47,28 @@ export default function SliderInput({
   const span = bound.max - bound.min;
   const pct = span > 0 ? ((value - bound.min) / span) * 100 : 100;
 
-  const commit = (s: string) => {
+  // Live while typing: apply a valid number after a short pause; Enter / leaving the field commit at once
+  const typing = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (typing.current) clearTimeout(typing.current);
+  }, []);
+  const apply = (s: string) => {
     const n = parseLooseNumber(s);
     if (Number.isFinite(n)) onChange(Math.min(bound.max, Math.max(bound.min, n)));
+  };
+  const commit = (s: string) => {
+    if (typing.current) clearTimeout(typing.current);
+    apply(s);
     setDraft(null);
+  };
+  const onType = (s: string) => {
+    setDraft(s);
+    if (typing.current) clearTimeout(typing.current);
+    typing.current = setTimeout(() => {
+      const n = parseLooseNumber(s);
+      // Only values inside the range apply live (a half-typed number like "1" for 1,500,000 waits for Enter)
+      if (Number.isFinite(n) && n >= bound.min && n <= bound.max) onChange(n);
+    }, 400);
   };
 
   const prefix = kind === "currency" ? "₪" : "";
@@ -99,11 +117,12 @@ export default function SliderInput({
               setDraft(display(value, kind, decimals).replace(/,/g, ""));
               requestAnimationFrame(() => e.target.select());
             }}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => onType(e.target.value)}
             onBlur={(e) => commit(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") (e.target as HTMLInputElement).blur();
               if (e.key === "Escape") {
+                if (typing.current) clearTimeout(typing.current);
                 setDraft(null);
                 (e.target as HTMLInputElement).blur();
               }
