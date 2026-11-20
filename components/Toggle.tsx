@@ -58,7 +58,7 @@ export function Segmented<T extends string>({
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-              active ? "bg-white shadow-sm dark:bg-slate-300" : "text-slate-500 hover:text-slate-700"
+              active ? "bg-white shadow-sm" : "text-slate-500 hover:text-slate-700"
             }`}
             style={active ? { color: accent } : undefined}
           >

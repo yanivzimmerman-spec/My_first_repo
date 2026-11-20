@@ -1,3 +1,4 @@
+// Legal guardrails (no affiliate links, no contact collection, no financial data on a server): see lib/config.ts
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -27,11 +28,13 @@ import ComboView from "./ComboView";
 import ControlPanel, { type PanelSection } from "./ControlPanel";
 import Planner from "./plan/Planner";
 import StatsView from "./StatsView";
+import Disclaimer from "./Disclaimer";
+import { InfoPageView, InfoLinks, INFO_PAGES, type InfoPage } from "./InfoPages";
+import { CONTACT_EMAIL as FEEDBACK_EMAIL, SHARE_ENDING } from "@/lib/config";
 
-const FEEDBACK_EMAIL = "yanivzimmerman@gmail.com";
 const START: SimInputs = { ...DEFAULT_INPUTS, ...situationInputs(SITUATIONS[0]) };
 type QView = "money" | "home" | "market" | "extras";
-type View = "pick" | QView | "result" | "plan" | "stats";
+type View = "pick" | QView | "result" | "plan" | "stats" | InfoPage;
 
 /** The questions, one screen each; every option of the full simulator is asked along the way. */
 const QUESTIONS: { view: QView; name: string; title: string; intro: string; sections: PanelSection[] }[] = [
@@ -69,6 +72,8 @@ const STAGES = ["המצב", ...QUESTIONS.map((q) => q.name), "התוצאה"];
 
 const VIEW_OF: Record<string, View> = { "": "pick", "#result": "result", "#plan": "plan", "#stats": "stats" };
 for (const q of QUESTIONS) VIEW_OF[`#${q.view}`] = q.view;
+for (const p of INFO_PAGES) VIEW_OF[`#${p.id}`] = p.id;
+const isInfo = (v: View): v is InfoPage => INFO_PAGES.some((p) => p.id === v);
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -210,6 +215,7 @@ export default function Flow() {
       `🏠 קונים דירה: ${formatILS(re.netWorth)} נטו`,
       `📈 S&P 500: ${formatILS(result.sp500.netWorth)} נטו`,
       `(${situation?.title ?? "מצב מותאם"}, הון ${formatILS(re.startCapital)}, דירה ב-${formatILS(re.propertyPrice)})`,
+      SHARE_ENDING,
     ]
       .join("\n")
       .replace(/[⁦-⁩]/g, "");
@@ -217,6 +223,20 @@ export default function Flow() {
     setCopied(ok ? "ok" : "fail");
     setTimeout(() => setCopied("idle"), 2200);
   };
+
+  // Screen readers and keyboard users: after moving to a new screen, focus its heading
+  const [moved, setMoved] = useState(false);
+  useEffect(() => {
+    if (!moved) {
+      setMoved(true);
+      return;
+    }
+    const h = document.querySelector<HTMLElement>("main h1:not([hidden]), main h2");
+    if (h) {
+      h.tabIndex = -1;
+      h.focus({ preventScroll: true });
+    }
+  }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stageIndex = Math.max(0, ORDER.indexOf(view));
   useEffect(() => {
@@ -234,6 +254,7 @@ export default function Flow() {
 
   return (
     <>
+      <Disclaimer show={view === "result" || view === "plan"} />
       {planSeed && (
         <div hidden={view !== "plan"}>
           <Planner
@@ -244,6 +265,7 @@ export default function Flow() {
             }}
             freshProfile={() => profileFromInputs(inputs)}
             onExit={back}
+            onPage={(p) => go(p)}
           />
         </div>
       )}
@@ -271,7 +293,7 @@ export default function Flow() {
                 {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
               </button>
             </div>
-            {view !== "stats" && (
+            {view !== "stats" && !isInfo(view) && (
               <nav aria-label="שלבים" className="mt-5">
                 <ol className="grid grid-cols-6 gap-1">
                   {STAGES.map((name, i) => {
@@ -300,14 +322,15 @@ export default function Flow() {
 
           <main>
             {view === "stats" && <StatsView onBack={back} />}
+            {isInfo(view) && <InfoPageView page={view} onBack={back} />}
 
             {/* ---------- 1. Situation ---------- */}
             {view === "pick" && (
               <section>
                 <h1 className="text-[28px] font-bold leading-tight text-slate-900 [text-wrap:balance] sm:text-4xl">
-                  <span className="text-re">דירה</span> או <span className="text-sp-ink">S&P 500</span>: מה ישאיר לכם יותר?
+                  <span className="text-re">דירה</span> או <span className="text-sp-ink">S&P 500</span>: מה יוצא בחישוב?
                 </h1>
-                <p className="mt-2 text-[15px] text-slate-600">בחרו את המצב שלכם, ונבדוק יחד בשלושה צעדים.</p>
+                <p className="mt-2 text-[15px] text-slate-600">בחרו את המצב שלכם, ונחשב יחד, צעד אחר צעד, לפי הנתונים וההנחות שלכם.</p>
                 <SituationPicker
                   inputs={result.inputs}
                   set={set}
@@ -363,7 +386,7 @@ export default function Flow() {
             {view === "result" && scenarios && (
               <div className="space-y-3">
                 {backButton("חזרה")}
-                <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenR} details={false} />
+                <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenR} details={false} onRules={() => go("rules")} />
                 <Fold title="למה זה יצא ככה?" hint="מה הכריע, ומה צריך לקרות כדי שזה יתהפך">
                   <div className="px-2">
                     <VerdictDetails result={result} breakEven={breakEven} breakEvenRent={breakEvenR} comboLink={false} framed={false} />
@@ -395,7 +418,7 @@ export default function Flow() {
                     <Compass size={19} aria-hidden /> ומה עכשיו?
                   </h2>
                   <p className="mt-1 text-[14px] leading-relaxed text-slate-300">
-                    לפני החלטה: כרית ביטחון, הלוואות, מה עושים קודם, ותוכנית מסודרת עם פרומפט ליועץ AI.
+                    הבסיס שהחישוב שם בצד, סיכום מסודר של החישוב, ושאלות להכנה לפגישה עם בעל רישיון.
                   </p>
                   <a
                     href="#plan"
@@ -432,9 +455,11 @@ export default function Flow() {
 
           <footer className="mt-12 space-y-3 border-t border-slate-200 pt-5 text-[12px] leading-relaxed text-slate-500">
             <p>
-              סימולציה לצורכי המחשה בלבד, על הנחות קבועות ומפושטות. אין לראות בה ייעוץ השקעות, ייעוץ מס או המלצה לפעולה.
+              סימולציה לצורכי המחשה בלבד, על הנחות קבועות ומפושטות שבחרתם. היא לא ייעוץ השקעות, ייעוץ מס או ייעוץ משכנתאות,
+              ולא מתחשבת בכל הצרכים שלכם.
             </p>
             <p>{PRIVACY_NOTE}</p>
+            <InfoLinks onOpen={(p) => go(p)} />
             <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <a href={`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent("משוב על נדל״ן מול סנופי")}`} className="inline-flex items-center gap-1.5 hover:text-slate-900">
                 <Mail size={13} /> שליחת משוב

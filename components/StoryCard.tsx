@@ -7,7 +7,7 @@ function Step({ when, children }: { when: string; children: React.ReactNode }) {
   return (
     <li className="relative border-r-2 border-slate-100 pb-4 pr-4 last:pb-0">
       <span className="absolute -right-[5px] top-1.5 h-2 w-2 rounded-full bg-slate-300" />
-      <p className="text-[12px] font-semibold text-slate-400">{when}</p>
+      <p className="text-[12px] font-semibold text-slate-500">{when}</p>
       <p className="mt-0.5 text-[14px] leading-relaxed text-slate-700">{children}</p>
     </li>
   );
@@ -104,7 +104,7 @@ export default function StoryCard({ result }: { result: SimResult }) {
           </h4>
           <ol>
             <Step when="היום">
-              {re.oldHomeNetProceeds > 0 && <>גם כאן מוכרים את הדירה הקיימת. </>}משקיעים את אותם <B>{formatCompactILS(re.startCapital)}</B> {sp.vehicle === "israeli" ? "בקרן מחקה" : "ב-ETF אירי"}
+              {re.oldHomeNetProceeds > 0 && <>גם כאן מוכרים את הדירה הקיימת. </>}משקיעים את אותם <B>{formatCompactILS(re.startCapital)}</B> {sp.vehicle === "israeli" ? "במדד, דרך קרן מחקה ישראלית (כמו שבחרתם)" : "במדד, דרך ETF אירי (כמו שבחרתם)"}
               {sp.loanPrincipal > 0 && <>, ועוד הלוואה של {formatCompactILS(sp.loanPrincipal)}</>}. בלי מס רכישה ובלי עמלות
               גדולות.
             </Step>

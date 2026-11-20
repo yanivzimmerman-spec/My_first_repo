@@ -14,26 +14,54 @@
  */
 
 // ---------------------------------------------------------------------------
-// Constants — Israeli rules as of late 2026
+// Constants — tax and regulation rules live in rules.ts (value, source, date checked)
 // ---------------------------------------------------------------------------
+import {
+  PURCHASE_TAX_SINGLE,
+  PURCHASE_TAX_ADDITIONAL,
+  VAT,
+  RENT_EXEMPT_CEILING_MONTHLY,
+  RENT_FLAT_TAX_RATE,
+  TAPER_REMAINDER_RATE,
+  OWN_RENT_DEDUCTION_CAP_MONTHLY,
+  CAPITAL_GAINS_TAX_RATE,
+  SHEVACH_EXEMPT_MONTHS,
+  SHEVACH_SINGLE_CEILING,
+  SURTAX_RATE,
+  SURTAX_THRESHOLD,
+  SURTAX_RE_SALE_THRESHOLD,
+  PTI_MAX,
+  PTI_WARN,
+  MAX_LTV,
+  DIVIDEND_DRAG,
+  RENEWAL_LEVY_RATE,
+  DEPRECIATION_RATE,
+} from "./rules.ts";
+export {
+  PURCHASE_TAX_SINGLE,
+  PURCHASE_TAX_ADDITIONAL,
+  VAT,
+  RENT_EXEMPT_CEILING_MONTHLY,
+  RENT_FLAT_TAX_RATE,
+  TAPER_REMAINDER_RATE,
+  OWN_RENT_DEDUCTION_CAP_MONTHLY,
+  CAPITAL_GAINS_TAX_RATE,
+  SHEVACH_EXEMPT_MONTHS,
+  SHEVACH_SINGLE_CEILING,
+  SURTAX_RATE,
+  SURTAX_THRESHOLD,
+  SURTAX_RE_SALE_THRESHOLD,
+  PTI_MAX,
+  PTI_WARN,
+  MAX_LTV,
+  DIVIDEND_DRAG,
+  RENEWAL_LEVY_RATE,
+  DEPRECIATION_RATE,
+};
 
-/** מס רכישה — דירה יחידה / משפר דיור. Amounts of 16.1.2024, frozen until 15.1.2028. */
-export const PURCHASE_TAX_SINGLE: ReadonlyArray<readonly [number, number]> = [
-  [1_978_745, 0],
-  [2_347_040, 0.035],
-  [6_055_070, 0.05],
-  [20_183_565, 0.08],
-  [Infinity, 0.1],
-];
 
-/** מס רכישה — דירה נוספת (temporary order, purchases up to 10.2.2027 unless extended). */
-export const PURCHASE_TAX_ADDITIONAL: ReadonlyArray<readonly [number, number]> = [
-  [6_055_070, 0.08],
-  [Infinity, 0.1],
-];
 
-/** VAT since 1.1.2025 */
-export const VAT = 0.18;
+
 /** Typical broker fee (each side), before VAT */
 export const BROKER_RATE = 0.02;
 /** Typical lawyer fee (each side), before VAT */
@@ -49,12 +77,10 @@ export const BUILDING_INSURANCE_MONTHLY = 50;
 /** Mortgage life insurance: ₪ a month per ₪1M of balance (shrinks with the loan, ends at payoff) */
 export const LIFE_INSURANCE_PER_MILLION = 100;
 
-/** Urban renewal (optional): betterment levy share of the uplift, years without income while building */
-export const RENEWAL_LEVY_RATE = 0.25;
+/** Urban renewal: years without income while building (levy rate in rules.ts) */
 export const RENEWAL_BUILD_YEARS = 3;
 
-/** Notional depreciation the Tax Authority deducts for rented years (contested in court) */
-export const DEPRECIATION_RATE = 0.02;
+/** Notional depreciation applies to the building share of the price (rate in rules.ts) */
 export const BUILDING_SHARE_OF_PRICE = 2 / 3;
 
 /**
@@ -67,51 +93,16 @@ export function rateForTerm(termYears: number): number {
 }
 export const CPI_REAL_RATE_GAP = 1.45;
 
-/** Rental income: monthly exemption ceiling (frozen 2024–2027), 10% track, marginal rate for the taper */
-export const RENT_EXEMPT_CEILING_MONTHLY = 5_654;
-export const RENT_FLAT_TAX_RATE = 0.1;
-/** Rent above the tapered exemption is taxed at 10% (Knesset Research Center example; confirmed by the user) */
-export const TAPER_REMAINDER_RATE = 0.1;
-/** s.122(f): sole-apartment owner living in a rental deducts rent paid, up to ₪90K a year, on the 10% track */
-export const OWN_RENT_DEDUCTION_CAP_MONTHLY = 90_000 / 12;
 
-/** מס שבח / capital gains on real gain */
-export const CAPITAL_GAINS_TAX_RATE = 0.25;
-/** Sole-apartment exemption needs 18 months of ownership */
-export const SHEVACH_EXEMPT_MONTHS = 18;
-/** Sole-apartment exemption price ceiling (2024–2027, frozen) */
-export const SHEVACH_SINGLE_CEILING = 5_008_000;
 
-/** מס יסף: 3% + 2% on capital income above the threshold (2025–2027, frozen) */
-export const SURTAX_RATE = 0.05;
-export const SURTAX_THRESHOLD = 721_560;
-/** Non-exempt apartment sales at or below this value are excluded from surtax */
-export const SURTAX_RE_SALE_THRESHOLD = 5_385_285;
 
-/**
- * Bank of Israel payment-to-income (Directive 329, sections 5–6): no housing
- * loan above 50% of disposable income; above 40% banks treat it as high risk.
- */
-export const PTI_MAX = 0.5;
-export const PTI_WARN = 0.4;
 
-/**
- * Bank of Israel LTV limits (Directive 329 §2): 75% when the buyer owns no
- * other apartment, 70% for a replacement buyer who still owns the old one and
- * undertakes to sell it, 50% otherwise.
- */
-export const MAX_LTV = { single: 0.75, upgrader: 0.7, additional: 0.5 } as const;
 
 /** An upgrader who sells first owns nothing at purchase, so the 75% limit applies. */
 export function maxLtvFor(type: ApartmentType, sellFirst: boolean): number {
   return type === "upgrader" && sellFirst ? MAX_LTV.single : MAX_LTV[type];
 }
 
-/**
- * Dividend withholding drag inside the fund, per year of fund value
- * (~1.27% S&P yield × 25% US withholding for an Israeli fund, × 15% for an Irish UCITS ETF).
- */
-export const DIVIDEND_DRAG = { israeli: 0.0032, irish: 0.0019 } as const;
 
 // ---------------------------------------------------------------------------
 // Input schema

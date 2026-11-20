@@ -109,7 +109,7 @@ export default function SituationPicker({
             <span className="min-w-0">
               <span className="block text-[13.5px] font-semibold leading-snug text-slate-900 sm:text-[14.5px]">לא בטוחים? בואו נעבור על זה יחד</span>
               <span className="mt-0.5 block text-[11.5px] leading-snug text-slate-500 sm:text-[12.5px]">
-                מה יש לכם, מה עושים קודם, ותוכנית מסודרת בשישה שלבים קצרים
+                מה יש לכם, מה החישוב שם בצד, וסיכום מסודר בשישה שלבים קצרים
               </span>
             </span>
           </a>

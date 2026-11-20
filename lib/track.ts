@@ -1,7 +1,7 @@
 /**
  * Anonymous usage counts for the alpha (artifact `db` capability).
  *
- * One document per visitor at events/<opaque id>, holding counters only: which cards were
+ * One document per visit at events/<random id>, holding counters only: which cards were
  * clicked, how far the guided path went, what was copied. No amounts, no answers, no names.
  * Works only where the viewer can write (signed-in visitors with Contributor access or
  * organization members); everywhere else (the Next site, signed-out or view-only visitors)
@@ -50,7 +50,10 @@ const empty = (now: string): VisitorSummary => ({
 
 /** Shown on the site, next to the disclaimer. */
 export const PRIVACY_NOTE =
-  "פרטיות: האתר לא אוסף מידע רגיש. הסכומים והתשובות שאתם מזינים נשארים אצלכם בדפדפן ולא נשמרים אצלנו. אנחנו סופרים רק שימוש אנונימי, כמו על אילו כפתורים לוחצים ועד איזה שלב מגיעים, בלי סכומים, בלי תשובות ובלי שמות.";
+  "פרטיות: האתר לא אוסף מידע רגיש. הסכומים והתשובות שאתם מזינים נשארים אצלכם בדפדפן ולא נשמרים אצלנו. אנחנו סופרים רק שימוש אנונימי, כמו על אילו כפתורים לוחצים ועד איזה שלב מגיעים, בלי סכומים, בלי תשובות, בלי שמות ובלי מזהה משתמש.";
+
+/** The situation cards' fixed names: the only text a usage record can hold. */
+export const CARD_IDS = ["firstHome", "firstInvest", "upgrade", "secondInvest", "moveRentOld", "twoRentals"];
 
 /** Day only (YYYY-MM-DD): no exact times are kept. */
 const today = () => new Date().toISOString().slice(0, 10);
@@ -60,6 +63,8 @@ export function applyEvent(s: VisitorSummary, e: TrackEvent, seenSteps: Set<numb
   const next: VisitorSummary = { ...s, cards: { ...s.cards }, steps: { ...s.steps } };
   switch (e.type) {
     case "card":
+      // Only the six fixed card names are ever stored
+      if (!CARD_IDS.includes(e.id)) break;
       next.cards[e.id] = (next.cards[e.id] ?? 0) + 1;
       break;
     case "step": {
@@ -89,6 +94,22 @@ let disabled = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 const seenSteps = new Set<number>();
 
+/** Random per-visit id (kept for this tab's session only). */
+function visitId(): string {
+  const make = () =>
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID().replace(/-/g, "")
+      : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  try {
+    const k = "visit-id";
+    const v = sessionStorage.getItem(k) || make();
+    sessionStorage.setItem(k, v);
+    return v;
+  } catch {
+    return make();
+  }
+}
+
 function claude(): ClaudeLike | null {
   if (typeof window === "undefined") return null;
   const c = (window as unknown as { claude?: ClaudeLike }).claude;
@@ -102,13 +123,12 @@ function init(): Promise<DocRef | null> {
     if (!c) return null;
     const [db, user] = (await Promise.all([c.use("db"), c.use("user")])) as [
       { doc(p: string): DocRef } | null,
-      { id(): Promise<string | null>; can(n: string): Promise<boolean | null> } | null,
+      { can(n: string): Promise<boolean | null> } | null,
     ];
     if (!db || !user) return null;
     if ((await user.can("data.write")) === false) return null;
-    const id = await user.id();
-    if (!id) return null;
-    const ref = db.doc(`events/${id}`);
+    // A random id for this visit: never the account id, so a record can't be tied to a person
+    const ref = db.doc(`events/${visitId()}`);
     const now = today();
     try {
       const snap = await ref.get();

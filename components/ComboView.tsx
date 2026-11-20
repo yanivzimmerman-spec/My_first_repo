@@ -94,13 +94,20 @@ export default function ComboView({
 
         {best && (
           <p className="mt-4 rounded-lg bg-slate-50 px-3.5 py-2.5 text-[14px] font-medium text-slate-800">
-            בהנחות שלכם, השילוב הכי משתלם הוא {best.share}% לדירה ו-{100 - best.share}% למדד: {formatILS(best.value)}.
+            הסכום הגבוה ביותר בהנחות האלה: {best.share}% לדירה ו-{100 - best.share}% למדד, {formatILS(best.value)}.
           </p>
         )}
 
-        <div className="mt-6 h-[260px] w-full" dir="ltr">
+        <ul className="sr-only">
+          {curve.map((p) => (
+            <li key={p.share}>
+              {p.share}% לדירה: {p.value === null ? "הסכום לא מספיק לדירה" : formatILS(p.value)}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-6 h-[260px] w-full" dir="ltr" aria-hidden>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={curve.map((p) => ({ ...p, v: p.value ?? 0 }))} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
+            <BarChart accessibilityLayer={false} data={curve.map((p) => ({ ...p, v: p.value ?? 0 }))} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
               <XAxis
                 dataKey="share"
                 reversed
@@ -136,7 +143,7 @@ export default function ComboView({
           </ResponsiveContainer>
         </div>
         <p className="mt-2 text-[12px] text-slate-500">
-          כל עמודה היא שווי נטו בסוף התקופה. סגול: השילוב שבחרתם, ירוק: הכי משתלם. לחיצה על עמודה בוחרת אותה.
+          כל עמודה היא שווי נטו בסוף התקופה. סגול: השילוב שבחרתם, ירוק: הסכום הגבוה ביותר בהנחות האלה. לחיצה על עמודה בוחרת אותה.
           {curve.some((p) => p.value === null) &&
             ` עמודות ריקות (${curve
               .filter((p) => p.value === null)

@@ -1,3 +1,4 @@
+// Legal guardrails (no affiliate links, no contact collection, no financial data on a server): see lib/config.ts
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -19,13 +20,15 @@ import ComboView from "./ComboView";
 import SituationPicker from "./SituationPicker";
 import Planner from "./plan/Planner";
 import StatsView from "./StatsView";
+import Disclaimer from "./Disclaimer";
+import { InfoPageView, InfoLinks, INFO_PAGES, type InfoPage } from "./InfoPages";
 import { track, startTracking, PRIVACY_NOTE } from "@/lib/track";
 import { profileFromInputs, encodePlan, decodePlan, type Profile, type PlanState } from "@/lib/plan";
+import { CONTACT_EMAIL as FEEDBACK_EMAIL, SHARE_ENDING } from "@/lib/config";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
 
-const FEEDBACK_EMAIL = "yanivzimmerman@gmail.com";
 
 const sameInputs = (a: SimInputs, b: SimInputs) =>
   (Object.keys(a) as (keyof SimInputs)[]).every((k) => a[k] === b[k]);
@@ -101,11 +104,12 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
   }, [inputs]);
 
   // Second page: the mixed strategy, reached through #combo (works in plain links and the artifact viewer)
-  const [view, setView] = useState<"main" | "combo" | "plan" | "stats">("main");
+  const [view, setView] = useState<"main" | "combo" | "plan" | "stats" | InfoPage>("main");
   useEffect(() => {
     const read = () => {
       const h = window.location.hash;
-      const next = h === "#combo" ? "combo" : h === "#plan" && withGuide ? "plan" : h === "#stats" && withGuide ? "stats" : "main";
+      const page = INFO_PAGES.find((p) => `#${p.id}` === h)?.id;
+      const next = page ?? (h === "#combo" ? "combo" : h === "#plan" && withGuide ? "plan" : h === "#stats" && withGuide ? "stats" : "main");
       setView((prev) => {
         if (prev !== next) window.scrollTo({ top: 0 });
         return next;
@@ -134,6 +138,28 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
   useEffect(() => {
     if (view === "plan" && !planSeed) setPlanSeed(profileFromInputs(inputs));
   }, [view, planSeed, inputs]);
+  // Info pages open from state (the viewer may ignore address changes); the address follows when it can
+  const [returnTo, setReturnTo] = useState<"main" | "plan">("main");
+  const openPage = useCallback((p: InfoPage) => {
+    setView((v) => {
+      setReturnTo(v === "plan" ? "plan" : "main");
+      return p;
+    });
+    window.scrollTo({ top: 0 });
+    try {
+      window.history.pushState(null, "", `#${p}`);
+    } catch {
+      /* address not writable here */
+    }
+  }, []);
+  const closePage = useCallback(() => {
+    setView(returnTo);
+    try {
+      window.history.pushState(null, "", returnTo === "plan" ? "#plan" : window.location.pathname + window.location.search);
+    } catch {
+      /* address not writable here */
+    }
+  }, [returnTo]);
   const openInSimulator = useCallback((next: SimInputs) => {
     setInputs(next);
     window.location.hash = "";
@@ -167,6 +193,7 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
       `📈 S&P 500: ${formatILS(result.sp500.netWorth)} נטו`,
       `(הון עצמי ${formatILS(result.realEstate.startCapital)}${result.realEstate.oldHomeNetProceeds > 0 ? " כולל מכירת הדירה הקיימת" : ""}, ${{ single: "דירה יחידה", upgrader: "משפרי דיור", additional: "דירה נוספת" }[inputs.apartmentType]}${inputs.loanEnabled ? `, הלוואה לדירה ${formatILS(inputs.loanAmount)}` : ""}${inputs.spLoanEnabled ? `, הלוואה להשקעה ${formatILS(inputs.spLoanAmount)}` : ""}, ריבית ${inputs.mortgageRate}%, תשואת S&P ${inputs.spReturn}%)`,
       ...(STANDALONE ? [] : [url]),
+      SHARE_ENDING,
     ]
       .join("\n")
       .replace(/[\u2066-\u2069]/g, "");
@@ -193,11 +220,13 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
         freshProfile={() => profileFromInputs(inputs)}
         initialState={planFromUrl}
         onStateChange={STANDALONE ? undefined : savePlanToUrl}
+        onPage={openPage}
       />
     </div>
   );
   return (
     <>
+    <Disclaimer show={view === "main" || view === "plan"} />
     {planner}
     {view !== "plan" && (
     <div className="mx-auto max-w-[1180px] pr-[max(16px,env(safe-area-inset-right,0px))] pl-[max(16px,env(safe-area-inset-left,0px))] pb-16 sm:px-6 lg:px-8">
@@ -221,11 +250,11 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
           </button>
         </div>
         <h1 className="mt-1 max-w-[22ch] text-[28px] font-bold leading-tight text-slate-900 [text-wrap:balance] sm:text-4xl">
-          מה משתלם יותר: <span className="whitespace-nowrap text-re">לקנות דירה</span> או <span className="whitespace-nowrap text-sp-ink">להשקיע ב-S&P 500</span>?
+          <span className="whitespace-nowrap text-re">לקנות דירה</span> או <span className="whitespace-nowrap text-sp-ink">להשקיע ב-S&P 500</span>: מה יוצא בחישוב?
         </h1>
         <p className="mt-3 max-w-[60ch] text-[15px] leading-relaxed text-slate-600 sm:text-base">
-          הזיזו את הנתונים וקבלו תשובה מיידית: כמה כסף יישאר לכם בכל מסלול, אחרי מס רכישה, מס שבח, מס על השכירות ומס
-          רווחי הון.
+          הזיזו את הנתונים וראו מיד מה יוצא בחישוב: כמה כסף נשאר בכל מסלול לפי ההנחות שלכם, אחרי מס רכישה, מס שבח, מס על
+          השכירות ומס רווחי הון.
         </p>
 
         <SituationPicker
@@ -236,7 +265,9 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
         />
       </header>
 
-      {view === "stats" ? (
+      {INFO_PAGES.some((p) => p.id === view) ? (
+        <InfoPageView page={view as InfoPage} onBack={closePage} />
+      ) : view === "stats" ? (
         <StatsView />
       ) : view === "combo" ? (
         <ComboView inputs={result.inputs} result={result} dark={theme === "dark"} />
@@ -263,7 +294,7 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
       */}
       <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_auto_auto_1fr] lg:items-start lg:gap-8">
         <div className="min-w-0 lg:col-start-2 lg:row-start-1">
-          <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenRentResult} guideLink={withGuide} />
+          <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenRentResult} guideLink={withGuide} onRules={() => openPage("rules")} />
         </div>
 
         <aside
@@ -354,6 +385,9 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
           )}
         </div>
       </footer>
+      <div className="mt-4 text-[12.5px] text-slate-500">
+        <InfoLinks onOpen={openPage} />
+      </div>
     </div>
     )}
     </>

@@ -53,8 +53,8 @@ export default function SliderInput({
   const width = kind === "currency" ? "w-[78px]" : kind === "years" || kind === "months" ? "w-[24px]" : "w-[40px]";
 
   return (
-    <div className={disabled ? "opacity-50" : ""}>
-      <div className="mb-2.5 flex items-center justify-between gap-3">
+    <div>
+      <div className={`mb-2.5 flex items-center justify-between gap-3 ${disabled ? "opacity-60" : ""}`}>
         <label htmlFor={id} className="text-[15px] text-slate-700">
           {label}
         </label>
@@ -101,10 +101,15 @@ export default function SliderInput({
         step={bound.step}
         value={value}
         disabled={disabled || span <= 0}
+        aria-describedby={hint ? `${id}-hint` : undefined}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ ["--pct" as string]: `${Math.min(100, Math.max(0, pct))}%`, ["--accent" as string]: accent }}
       />
-      {hint && <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{hint}</p>}
+      {hint && (
+        <p id={`${id}-hint`} className="mt-2 text-[13px] leading-relaxed text-slate-500">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

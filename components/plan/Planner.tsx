@@ -43,10 +43,13 @@ import { Switch, Segmented } from "../Toggle";
 import VerdictBanner from "../VerdictBanner";
 import RiskGauges from "../RiskGauges";
 import { track, PRIVACY_NOTE } from "@/lib/track";
+import { SHARE_ENDING } from "@/lib/config";
+import SimNote from "../SimNote";
+import { InfoLinks, type InfoPage } from "../InfoPages";
 import ComboView from "../ComboView";
 import { comboCurve, type ComboPoint } from "@/lib/combo";
 
-const STEPS = ["מה יש לכם", "מה חשוב לכם", "קודם כל, הבסיס", "דירה או שוק ההון", "התוכנית שלכם", "התייעצות עם AI"] as const;
+const STEPS = ["מה יש לכם", "מה חשוב לכם", "הבסיס", "דירה או שוק ההון", "סיכום החישוב", "הכנה עם AI"] as const;
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -124,7 +127,7 @@ function LadderItem({
     <li className="flex gap-3.5 py-4 first:pt-0 last:pb-0">
       <span
         className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-          done ? "bg-slate-100 text-slate-400" : "bg-slate-900 text-white"
+          done ? "bg-slate-100 text-slate-500" : "bg-slate-900 text-white"
         }`}
       >
         {done ? <Check size={17} /> : icon}
@@ -171,6 +174,7 @@ export default function Planner({
   initialState,
   onStateChange,
   onExit,
+  onPage,
 }: {
   /** Starting values (from the simulator when opened from it) */
   initialProfile?: Profile;
@@ -184,6 +188,8 @@ export default function Planner({
   onStateChange?: (state: PlanState) => void;
   /** Leave the guided path (back to the simulator) without relying on the address */
   onExit?: () => void;
+  /** Open one of the info pages (terms, privacy, how it's calculated, accessibility) */
+  onPage?: (page: InfoPage) => void;
 } = {}) {
   const [theme, toggleTheme] = useTheme();
   const [step, setStep] = useState(initialState?.step ?? 0);
@@ -260,10 +266,10 @@ export default function Planner({
           </button>
         </div>
         <h1 className="mt-1 text-[28px] font-bold leading-tight text-slate-900 [text-wrap:balance] sm:text-4xl">
-          מה כדאי לעשות עם הכסף שלכם?
+          מה יוצא בחישוב, לפי הנתונים וההנחות שלכם?
         </h1>
         <p className="mt-3 max-w-[60ch] text-[15px] leading-relaxed text-slate-600 sm:text-base">
-          עוברים יחד, שלב אחר שלב: מה יש לכם, מה חשוב לכם, מה עושים קודם, ומה משאיר לכם יותר בסוף: דירה או שוק ההון.
+          עוברים יחד, שלב אחר שלב: מה יש לכם, מה חשוב לכם, מה החישוב שם בצד, ואיזה מסלול מסתיים עם יותר כסף לפי ההנחות: דירה או שוק ההון.
         </p>
       </header>
 
@@ -442,10 +448,15 @@ export default function Planner({
       </div>
 
       <p className="mt-10 text-[12px] leading-relaxed text-slate-500">
-        זה לא ייעוץ השקעות. הכלי מחשב מה קורה לפי ההנחות שבחרתם ולפי כללי המס והבנקאות בישראל, בפישוט. לפני החלטה כדאי
-        לבדוק עם יועץ השקעות או מתכנן פיננסי בעל רישיון.
+        זה לא ייעוץ השקעות, ייעוץ מס או ייעוץ משכנתאות. הכלי מחשב מה קורה לפי ההנחות שבחרתם ולפי כללי המס והבנקאות בישראל,
+        בפישוט, ולא מתחשב בכל הצרכים שלכם. החלטה כדאי לבדוק עם בעל רישיון.
       </p>
       <p className="mt-2 text-[12px] leading-relaxed text-slate-500">{PRIVACY_NOTE}</p>
+      {onPage && (
+        <div className="mt-3 text-[12px] text-slate-500">
+          <InfoLinks onOpen={onPage} />
+        </div>
+      )}
     </div>
   );
 }
@@ -676,63 +687,65 @@ function StepBasics({ p, set, b }: { p: Profile; set: SetFn; b: Basics }) {
   const months = monthsToMinimum(b);
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-      <h2 className="text-xl font-bold text-slate-900">קודם כל, הבסיס</h2>
+      <h2 className="text-xl font-bold text-slate-900">הבסיס: מה החישוב שם בצד</h2>
       <p className="mt-1 mb-6 text-[14px] text-slate-600">
-        לפני שממנפים, מסדרים את מה שמגן עליכם. זה הסדר שרוב המתכננים הפיננסיים ממליצים עליו.
+        לפני ההשוואה, החישוב מוריד מהכסף כרית ביטחון, הוצאות צפויות והלוואות יקרות, ומשווה רק את מה שנשאר. אלה נושאים שכדאי
+        לבדוק לפני כל החלטה.
       </p>
       <ol className="divide-y divide-slate-100">
         <LadderItem icon={<ShieldCheck size={17} />} title="כרית ביטחון" amount={b.cushion}>
-          {p.cushionMonths} חודשי הוצאות בצד, בפיקדון או בקרן כספית. את הכסף הזה לא משקיעים ולא ממנפים.
+          בחישוב, {p.cushionMonths} חודשי הוצאות נשארים בצד ולא נכנסים להשקעה.
           {b.cushion < b.cushionTarget && (
-            <> יש לכם כרגע {formatILS(b.cushion)} מתוך {formatILS(b.cushionTarget)}, ואת השאר משלימים מהחיסכון החודשי.</>
+            <> כרגע יש {formatILS(b.cushion)} מתוך {formatILS(b.cushionTarget)}, והחישוב מניח שהשאר מגיע מהחיסכון החודשי.</>
           )}
         </LadderItem>
         {b.bigExpense > 0 && (
           <LadderItem icon={<CalendarClock size={17} />} title="ההוצאה הגדולה שמתוכננת" amount={b.bigExpense}>
-            כסף שתצטרכו בקרוב לא שמים בדירה או במניות. שומרים אותו בצד.
-            {b.bigExpense < p.bigExpense && <> חסרים עוד {formatILS(p.bigExpense - b.bigExpense)}, מהחיסכון החודשי.</>}
+            החישוב שומר את הסכום הזה בצד ולא משקיע אותו.
+            {b.bigExpense < p.bigExpense && <> חסרים עוד {formatILS(p.bigExpense - b.bigExpense)}, והחישוב מניח שיגיעו מהחיסכון החודשי.</>}
           </LadderItem>
         )}
         {p.debt > 0 ? (
           p.debtRate >= EXPENSIVE_DEBT_RATE ? (
-            <LadderItem icon={<CreditCard size={17} />} title="להחזיר את ההלוואה" amount={b.debtPayoff}>
-              ריבית של {formatPct(p.debtRate, 1)} היא יקרה. כל שקל שמחזירים חוסך {formatPct(p.debtRate, 1)} בשנה בלי שום סיכון, יותר ממה
-              שסביר לצפות מהשקעה.
+            <LadderItem icon={<CreditCard size={17} />} title="הלוואה בריבית גבוהה" amount={b.debtPayoff}>
+              בחישוב, הלוואה בריבית {formatPct(p.debtRate, 1)} מוחזרת מהכסף שיש לכם. החזר כזה חוסך את הריבית בוודאות, וזה בדרך כלל
+              יותר ממה שאפשר לצפות מהשקעה.
               {b.debtKept > 0 && (
                 <>
                   {" "}
-                  {b.debtPayoff > 0 ? `נשארים ${formatILS(b.debtKept)}` : "כרגע אין כסף פנוי להחזר"}: כדאי להחזיר מהחיסכון החודשי לפני כל
-                  השקעה.
+                  {b.debtPayoff > 0 ? `נשארים ${formatILS(b.debtKept)}` : "כרגע אין כסף פנוי להחזר"}: בחישוב הם נשארים כהלוואה, וההחזר
+                  החודשי שלהם נכנס לחישוב.
                 </>
               )}
             </LadderItem>
           ) : (
-            <LadderItem icon={<CreditCard size={17} />} title="ההלוואה זולה" done>
-              ריבית של {formatPct(p.debtRate, 1)} נמוכה, אז אפשר להשאיר אותה. ההחזר החודשי שלה נכנס לחישוב של כמה משכנתא נוח לכם.
+            <LadderItem icon={<CreditCard size={17} />} title="הלוואה בריבית נמוכה" done>
+              בחישוב, הלוואה בריבית {formatPct(p.debtRate, 1)} נשארת, וההחזר החודשי שלה נכנס לחישוב של כמה משכנתא נוח לכם.
             </LadderItem>
           )
         ) : (
           <LadderItem icon={<CreditCard size={17} />} title="אין הלוואות יקרות" done>
-            מצוין, אין מה להחזיר קודם.
+            אין הלוואות להחזיר בחישוב.
           </LadderItem>
         )}
         {b.saleTax > 0 && (
           <LadderItem icon={<Receipt size={17} />} title="מס על מכירת ההשקעות" amount={b.saleTax}>
-            כדי להשתמש בכסף שבתיק צריך למכור, ואז משלמים 25% מס על הרווח. הורדנו את המס מהסכום. יועץ טוב יכול לעזור לתזמן את
-            המכירה.
+            כדי להשתמש בכסף שבתיק צריך למכור, ואז משלמים 25% מס על הרווח. הורדנו את המס מהסכום. איך ומתי למכור, זה נושא לבדיקה עם
+            בעל רישיון.
           </LadderItem>
         )}
         {p.hishtalmut > 0 && (
           <LadderItem icon={<PiggyBank size={17} />} title="קרן השתלמות" done={!p.useHishtalmut}>
             <p>
               {p.useHishtalmut
-                ? "צירפתם את הקרן לסכום. בהשוואה, מסלול הדירה מושך אותה להון העצמי, ומסלול ה-S&P משאיר אותה בקרן, במסלול מנייתי, בלי מס."
-                : "השארנו אותה בצד: הרווחים בה פטורים ממס, וחבל לוותר על זה. אם תרצו, אפשר לצרף אותה."}{" "}
+                ? "צירפתם את הקרן לסכום. בחישוב, מסלול הדירה מושך אותה להון העצמי, ומסלול ה-S&P משאיר אותה בקרן, במסלול מנייתי, בלי מס על הרווח."
+                : "בחישוב היא נשארת בצד. בקרן השתלמות, הרווח פטור ממס כל עוד הכסף נשאר בה. אפשר לצרף אותה לחישוב."}{" "}
               {kerenCost > 0 && (
                 <>
                   כמה עולה למשוך אותה: בערך {c(kerenCost)} במס שהייתם משלמים על אותו רווח בתיק רגיל, לאורך {p.years} שנה.
                 </>
-              )}
+              )}{" "}
+              לבדוק עם בעל רישיון מה מתאים לכם.
             </p>
             <div className="mt-2.5 flex items-center gap-2.5">
               <Switch checked={p.useHishtalmut} onChange={(v) => set("useHishtalmut", v)} label={`לצרף את קרן ההשתלמות (${c(p.hishtalmut)})`} />
@@ -745,7 +758,7 @@ function StepBasics({ p, set, b }: { p: Profile; set: SetFn; b: Basics }) {
       </ol>
 
       <div className={`mt-6 rounded-xl p-5 ${b.shortfall ? "bg-amber-50" : "bg-slate-50"}`}>
-        <p className="text-[13px] font-semibold text-slate-500">נשאר לכם להשקיע</p>
+        <p className="text-[13px] font-semibold text-slate-500">הסכום להשוואה</p>
         <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{formatILS(b.available)}</p>
         {upgraderEquity > 0 && (
           <p className="mt-1 text-[13.5px] text-slate-600">ועוד ההון שבדירה הנוכחית, כ-{c(upgraderEquity)} לפני הוצאות המכירה.</p>
@@ -755,7 +768,7 @@ function StepBasics({ p, set, b }: { p: Profile; set: SetFn; b: Basics }) {
             לדירה צריך לפחות {c(MIN_START_CAPITAL)} למקדמה ולהוצאות.{" "}
             {Number.isFinite(months)
               ? `בקצב החיסכון של היום תגיעו לשם בעוד כ-${months} חודשים.`
-              : "כדאי קודם לפנות מקום לחיסכון חודשי."}
+              : "בלי חיסכון חודשי, החישוב לא מגיע לסכום הזה."}
           </p>
         ) : (
           <p className="mt-1 text-[13.5px] text-slate-600">ובנוסף, כ-{formatILS(Math.max(0, b.monthlySaving))} בחודש מהחיסכון השוטף.</p>
@@ -808,12 +821,11 @@ function ShortfallCard({ b }: { b: Basics }) {
   return (
     <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 sm:p-7">
       <h2 className="flex items-center gap-2 text-xl font-bold text-amber-900">
-        <AlertTriangle size={20} /> עוד מוקדם לדירה
+        <AlertTriangle size={20} aria-hidden /> בחישוב, הסכום לא מספיק לדירה
       </h2>
       <p className="mt-2 text-[14.5px] leading-relaxed text-amber-900">
-        אחרי הבסיס נשארים {formatILS(b.available)}, ולדירה צריך לפחות {c(MIN_START_CAPITAL)}.{" "}
-        {Number.isFinite(months) ? `בקצב החיסכון של היום, זה ייקח כ-${months} חודשים.` : ""} בינתיים, חיסכון חודשי קבוע בקרן מחקה מדד
-        בדמי ניהול נמוכים בונה את ההון הזה, ונשאר נזיל אם תחליטו לקנות.
+        אחרי הבסיס נשארים {formatILS(b.available)}, ובחישוב דירה דורשת לפחות {c(MIN_START_CAPITAL)} למקדמה ולהוצאות.{" "}
+        {Number.isFinite(months) ? `בקצב החיסכון של היום, הסכום יגיע לשם בעוד כ-${months} חודשים.` : ""}
       </p>
     </section>
   );
@@ -842,64 +854,77 @@ function StepPlan({
 }) {
   const [linkCopied, setLinkCopied] = useState(false);
   const steps: string[] = [];
-  if (b.monthlySaving <= 0) steps.push("לאזן את התקציב החודשי. כל עוד ההוצאות גבוהות מההכנסה, משכנתא או השקעה חודשית לא יחזיקו.");
+  if (b.monthlySaving <= 0)
+    steps.push("נושא לבדיקה: התקציב החודשי. בחישוב ההוצאות גבוהות מההכנסה, ולכן אין ממה לשלם משכנתא או להפקיד להשקעה.");
   steps.push(
     b.cushion < b.cushionTarget
-      ? `לבנות כרית ביטחון של ${formatILS(b.cushionTarget)} בפיקדון או בקרן כספית: יש ${formatILS(b.cushion)}, ומשלימים מהחיסכון החודשי.`
-      : `לשים ${formatILS(b.cushion)} בצד, כרית ביטחון בפיקדון או בקרן כספית.`,
+      ? `נושא לבדיקה: כרית ביטחון. החישוב שם בצד ${formatILS(b.cushion)} מתוך ${formatILS(b.cushionTarget)} שבחרתם, ומניח שהשאר מגיע מהחיסכון החודשי. כסף כזה בדרך כלל נשמר נזיל ובסיכון נמוך.`
+      : `נושא לבדיקה: כרית ביטחון. החישוב שם בצד ${formatILS(b.cushion)} (${p.cushionMonths} חודשי הוצאות) ולא משקיע אותם. כסף כזה בדרך כלל נשמר נזיל ובסיכון נמוך.`,
   );
-  if (p.bigExpense > 0) steps.push(`לשמור ${formatILS(p.bigExpense)} להוצאה הגדולה שמתוכננת.`);
+  if (p.bigExpense > 0) steps.push(`נושא לבדיקה: ההוצאה המתוכננת. החישוב שומר ${formatILS(p.bigExpense)} בצד ולא משקיע אותם.`);
   if (p.debt > 0 && p.debtRate >= EXPENSIVE_DEBT_RATE)
     steps.push(
-      b.debtKept > 0
-        ? `להחזיר את ההלוואה (${formatILS(p.debt)}, ריבית ${formatPct(p.debtRate, 1)})${b.debtPayoff > 0 ? `: ${formatILS(b.debtPayoff)} עכשיו, והשאר מהחיסכון החודשי` : " מהחיסכון החודשי"}.`
-        : `להחזיר את ההלוואה של ${formatILS(b.debtPayoff)} (ריבית ${formatPct(p.debtRate, 1)}).`,
+      `נושא לבדיקה: ההלוואה בריבית ${formatPct(p.debtRate, 1)}. ${
+        b.debtKept > 0
+          ? b.debtPayoff > 0
+            ? `החישוב מחזיר ${formatILS(b.debtPayoff)} מהכסף שיש לכם, ו-${formatILS(b.debtKept)} נשארים כהלוואה.`
+            : "בחישוב אין כסף פנוי להחזר, וההלוואה נשארת."
+          : `החישוב מחזיר אותה (${formatILS(b.debtPayoff)}) מהכסף שיש לכם.`
+      } החזר של הלוואה חוסך את הריבית שלה בוודאות.`,
     );
-  steps.push("להמשיך להפקיד לקרן השתלמות עד התקרה הפטורה ממס. זה החיסכון המשתלם ביותר מבחינת מס.");
+  steps.push(
+    "נושא לבדיקה: קרן השתלמות. הפקדה עד התקרה פטורה ממס על הרווח, והכסף נזיל אחרי 6 שנים. לבדוק עם בעל רישיון מה מתאים לכם.",
+  );
 
   const r = decision?.result;
   const name = r ? winnerName(r) : null;
   let big: string;
-  if (!r) big = `לחסוך כל חודש בקרן מחקה מדד, עד שיהיו לכם לפחות ${c(MIN_START_CAPITAL)} להון עצמי.`;
+  if (!r) big = `נושא לבדיקה: הון עצמי. אחרי הבסיס נשארים ${formatILS(b.available)}, ובחישוב דירה דורשת לפחות ${c(MIN_START_CAPITAL)}.`;
   else if (r.winner === "sp500")
     big =
       r.realEstate.oldHomeNetProceeds > 0
-        ? `ההשוואה הייתה: מעבר לדירה החדשה, מול מכירת הדירה והשקעה של הכול (${c(r.realEstate.startCapital)}) במדד ומגורים בשכירות. המדד יצא משתלם יותר. אם למכור ולשכור לא בא בחשבון, כדאי לבדוק עם יועץ אפשרות שלישית: להישאר בדירה ולהשקיע במדד רק את ${c(b.available)}.`
-        : `בחישוב, השקעה של ${formatILS(b.available)} במדד S&P 500 (למשל בקרן מחקה בדמי ניהול נמוכים) והפקדה חודשית משאירות יותר מדירה.`;
+        ? `לפי ההנחות שבחרתם, מסלול המדד מסתיים עם סכום גבוה יותר. בהשוואה הזו, מסלול המדד כולל מכירה של הדירה, השקעה של הכול (${c(r.realEstate.startCapital)}) ומגורים בשכירות. אפשרות שלא נבדקה כאן: להישאר בדירה ולהשקיע רק ${c(b.available)}.`
+        : "לפי ההנחות שבחרתם, מסלול המדד מסתיים עם סכום גבוה יותר.";
   else if (r.winner === "realEstate")
-    big = `בחישוב, דירה בסביבות ${c(decision!.price)} עם משכנתא של כ-${c(r.realEstate.loanAmount)} משאירה יותר מהשקעה במדד.`;
-  else big = "שני המסלולים קרובים מאוד. אפשר לשלב: חלק בדירה וחלק במדד.";
+    big = `לפי ההנחות שבחרתם, מסלול הדירה (דירה בסביבות ${c(decision!.price)}, משכנתא של כ-${c(r.realEstate.loanAmount)}) מסתיים עם סכום גבוה יותר.`;
+  else big = "לפי ההנחות שבחרתם, שני המסלולים מסתיימים כמעט באותו סכום.";
   steps.push(big);
   const mix = decision?.bestMix;
   if (r && mix && mix.value > Math.max(r.realEstate.netWorth, r.sp500.netWorth))
     steps.push(
-      `שווה לשקול שילוב: בחישוב, ${mix.share}% מהכסף לדירה${mix.price ? ` (דירה בסביבות ${c(mix.price)})` : ""} והשאר במדד משאירים ${c(mix.value)}, יותר משני המסלולים לבד.`,
+      `בהנחות האלה, שילוב מסתיים עם הסכום הגבוה ביותר: ${mix.share}% מהכסף לדירה${mix.price ? ` (דירה בסביבות ${c(mix.price)})` : ""} והשאר במדד, כ-${c(mix.value)}.`,
     );
 
-  const why = r && name ? `לפי ההנחות שלכם, ${name} ${r.winner === "realEstate" ? "משאירה" : "משאיר"} כ-${c(r.difference)} יותר אחרי ${p.years} שנה.` : null;
+  const why =
+    r && name
+      ? `לפי ההנחות שבחרתם, ${r.winner === "realEstate" ? "מסלול הדירה מנצח" : "מסלול המדד מנצח"}: הוא מסתיים עם כ-${c(r.difference)} יותר אחרי ${p.years} שנה.`
+      : null;
   const flip =
     r && decision?.be.value != null
       ? r.winner === "realEstate"
-        ? `התשובה תתהפך אם מחירי הדירות יעלו פחות מ-${formatPct(decision.be.value, 1)} בשנה.`
-        : `הדירה תנצח רק אם המחירים יעלו ביותר מ-${formatPct(decision.be.value, 1)} בשנה.`
+        ? `התוצאה תתהפך אם מחירי הדירות יעלו פחות מ-${formatPct(decision.be.value, 1)} בשנה.`
+        : `מסלול הדירה יסתיים גבוה יותר רק אם המחירים יעלו ביותר מ-${formatPct(decision.be.value, 1)} בשנה.`
       : null;
 
   const questions = [
     "האם אתה מקבל עמלה על המוצרים שאתה ממליץ עליהם?",
     `כמה אשלם בדמי ניהול, וכמה זה יוצא אחרי ${p.years} שנה?`,
-    "איך כדאי למכור את התיק הקיים כדי לשלם פחות מס?",
+    "מה המשמעות במס של מכירת התיק הקיים, ואילו אפשרויות יש?",
     "אם לוקחים משכנתא: איזה תמהיל מתאים לי, ומה קורה אם הריבית עולה ב-2%?",
     "יש לי מספיק ביטוח חיים ואובדן כושר עבודה?",
   ];
 
   const summary = [
-    "התוכנית שלי (לפני היועץ):",
+    "סיכום החישוב (לפני היועץ):",
+    `המצב: ${situationText(p)}.`,
     ...steps.map((s, i) => `${i + 1}. ${s}`),
     ...(why ? [why] : []),
     ...(flip ? [flip] : []),
     "",
-    "שאלות ליועץ:",
+    "שאלות לבעל רישיון:",
     ...questions.map((q) => `• ${q}`),
+    "",
+    SHARE_ENDING,
   ]
     .join("\n")
     .replace(/[⁦-⁩]/g, "");
@@ -907,8 +932,8 @@ function StepPlan({
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-        <h2 className="text-xl font-bold text-slate-900">התוכנית שלכם, לפי הסדר</h2>
-        <p className="mt-1 text-[13px] text-slate-500">סיכום של החישוב לפי הנתונים וההנחות שלכם. לא המלצה אישית.</p>
+        <h2 className="text-xl font-bold text-slate-900">סיכום החישוב: סדר הנושאים שכדאי לבדוק</h2>
+        <SimNote />
         <p className="mt-3 rounded-lg bg-slate-50 px-3.5 py-2.5 text-[14px] leading-relaxed text-slate-700">המצב שלכם: {situationText(p)}.</p>
         <ol className="mt-4 space-y-3">
           {steps.map((s, i) => (
@@ -927,8 +952,8 @@ function StepPlan({
         )}
       </section>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-        <h3 className="text-lg font-bold text-slate-900">שאלות טובות ליועץ</h3>
-        <p className="mt-0.5 text-[13px] text-slate-500">כדי להגיע לפגישה מוכנים, ולדעת אם היועץ עובד בשבילכם</p>
+        <h3 className="text-lg font-bold text-slate-900">שאלות לבעל רישיון</h3>
+        <p className="mt-0.5 text-[13px] text-slate-500">כדי להגיע לפגישה מוכנים, ולדעת אם מי שמולכם עובד בשבילכם</p>
         <ul className="mt-3 list-disc space-y-1.5 ps-5 text-[14px] leading-relaxed text-slate-700">
           {questions.map((q) => (
             <li key={q}>{q}</li>
@@ -943,7 +968,7 @@ function StepPlan({
           className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-700"
         >
           {copied === "ok" ? <Check size={16} /> : <Copy size={16} />}
-          {copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "להעתיק את התוכנית"}
+          {copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "להעתיק את הסיכום"}
         </button>
         {linkable && (
           <button
@@ -960,7 +985,7 @@ function StepPlan({
             className="mt-5 ms-2 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700 transition hover:border-slate-500"
           >
             {linkCopied ? <Check size={16} /> : <Copy size={16} />}
-            {linkCopied ? "הקישור הועתק" : "קישור לתוכנית"}
+            {linkCopied ? "הקישור הועתק" : "קישור לסיכום"}
           </button>
         )}
       </section>
@@ -990,7 +1015,7 @@ function StepAI({
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-        <h2 className="text-xl font-bold text-slate-900">שאלות שיועץ היה שואל</h2>
+        <h2 className="text-xl font-bold text-slate-900">שאלות שבעל רישיון היה שואל</h2>
         <p className="mt-1 text-[14px] text-slate-600">לא חובה. על מה שלא תענו, הבינה המלאכותית תשאל אתכם בעצמה.</p>
         <div className="mt-5 space-y-4">
           {ADVISOR_QUESTIONS.map((q) => (
@@ -1018,7 +1043,7 @@ function StepAI({
             </div>
           ))}
           <label className="block">
-            <span className="text-[13.5px] font-medium text-slate-700">עוד משהו שחשוב שהיועץ יידע</span>
+            <span className="text-[13.5px] font-medium text-slate-700">עוד משהו שחשוב לדעת</span>
             <textarea
               rows={2}
               value={answers.note ?? ""}
@@ -1038,8 +1063,9 @@ function StepAI({
           <Sparkles size={19} aria-hidden /> הפרומפט שלכם
         </h2>
         <p className="mt-1 text-[14px] leading-relaxed text-slate-600">
-          מעתיקים ומדביקים בצ׳אט עם בינה מלאכותית, כמו Claude, ChatGPT או Gemini. היא תשאל קודם את מה שחסר
-          {left > 0 ? ` (${left} מהשאלות כאן ועוד כמה שאלות עומק)` : " (שאלות עומק שאי אפשר לענות עליהן בכפתור)"}, ורק אז תציע תוכנית.
+          מעתיקים ומדביקים בצ׳אט עם בינה מלאכותית. היא תשאל קודם את מה שחסר
+          {left > 0 ? ` (${left} מהשאלות כאן ועוד כמה שאלות עומק)` : " (שאלות עומק שאי אפשר לענות עליהן בכפתור)"}, ואז תסביר את האפשרויות, מה יכול
+          להשתבש בכל אחת, ואילו שאלות לשאול בעל רישיון.
         </p>
         <textarea
           readOnly
@@ -1049,6 +1075,9 @@ function StepAI({
           onFocus={(e) => e.currentTarget.select()}
           className="mt-4 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-[13px] leading-relaxed text-slate-700 focus:outline-none"
         />
+        <p className="mt-3 rounded-lg bg-amber-50 px-3.5 py-2.5 text-[13.5px] font-medium leading-relaxed text-amber-900">
+          התשובה תגיע מהבינה המלאכותית, לא מהאתר. היא לא ייעוץ השקעות ויכולה לטעות.
+        </p>
         <button
           type="button"
           onClick={() => {
@@ -1063,7 +1092,7 @@ function StepAI({
         <ul className="mt-5 list-disc space-y-1 ps-5 text-[12.5px] leading-relaxed text-slate-500">
           <li>הפרומפט כולל רק מספרים. אל תוסיפו בצ׳אט שם, תעודת זהות או מספרי חשבון.</li>
           <li>בינה מלאכותית יכולה לטעות, במיוחד במספרי מס עדכניים. את מה שחשוב, בדקו במקור.</li>
-          <li>זה לא מחליף יועץ מורשה, אבל תגיעו לפגישה מוכנים הרבה יותר.</li>
+          <li>זה לא מחליף בעל רישיון, אבל עוזר להגיע לפגישה מוכנים.</li>
         </ul>
       </section>
     </div>

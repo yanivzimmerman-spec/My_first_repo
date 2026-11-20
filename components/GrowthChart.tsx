@@ -135,7 +135,12 @@ export default function GrowthChart({ result, dark = false }: { result: SimResul
       </div>
 
       {view === "chart" ? (
-        <div className="h-[280px] w-full sm:h-[360px]" dir="ltr">
+        <div
+          className="h-[280px] w-full sm:h-[360px]"
+          dir="ltr"
+          role="img"
+          aria-label={`גרף שווי נטו לאורך ${last.year} שנים. בסוף: דירה ${formatILS(last.realEstate)}, S&P 500 ${formatILS(last.sp500)}. המספרים לכל שנה בכפתור טבלה.`}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={points} margin={{ top: 16, right: 4, left: 4, bottom: 0 }}>
               <defs>

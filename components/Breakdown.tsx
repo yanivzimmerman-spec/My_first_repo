@@ -254,7 +254,7 @@ export default function Breakdown({ result }: { result: SimResult }) {
           <span className="block text-lg font-bold text-slate-900">איך הגענו למספרים?</span>
           <span className="block text-[13px] text-slate-500">פירוט מלא: השקעה, מסים, משכנתא ושווי סופי</span>
         </span>
-        <ChevronDown size={20} className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown size={20} className={`shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
@@ -270,7 +270,7 @@ export default function Breakdown({ result }: { result: SimResult }) {
             {groups.map((g) => (
               <tbody key={g.title} className="tabular-nums">
                 <tr>
-                  <td colSpan={3} className="px-2 pb-1 pt-4 text-xs font-bold uppercase tracking-wide text-slate-400">
+                  <td colSpan={3} className="px-2 pb-1 pt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
                     {g.title}
                   </td>
                 </tr>
@@ -278,7 +278,7 @@ export default function Breakdown({ result }: { result: SimResult }) {
                   <tr key={l.label} className={`border-t border-slate-100 ${l.strong ? "bg-slate-50/80 font-semibold" : ""}`}>
                     <td className="px-2 py-2 text-slate-600">
                       {l.label}
-                      {l.note && <span className="block text-[11px] font-normal text-slate-400">{l.note}</span>}
+                      {l.note && <span className="block text-[11px] font-normal text-slate-500">{l.note}</span>}
                     </td>
                     <td className={`px-2 py-2 ${l.negative && typeof l.re === "number" && l.re > 0.5 ? "text-rose-600" : "text-slate-900"}`}>
                       {cell(l.re, l.negative)}
@@ -298,7 +298,7 @@ export default function Breakdown({ result }: { result: SimResult }) {
               </tr>
             </tbody>
           </table>
-          <p className="mt-3 px-2 text-[11px] leading-relaxed text-slate-400">
+          <p className="mt-3 px-2 text-[11px] leading-relaxed text-slate-500">
             הנחות: מדרגות מס רכישה הקפואות עד 15.1.2028 · תקרות המס קפואות עד סוף 2027 וצמודות למדד אחר כך ·{" "}
             {result.inputs.saleYears > 1
               ? `התיק נמכר על פני ${result.inputs.saleYears} שנים בחלקים שווים, ומס היסף מחושב לכל שנה מול התקרה השנתית; הדירה נמכרת בשנה הראשונה`

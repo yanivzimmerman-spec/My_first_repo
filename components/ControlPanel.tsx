@@ -769,13 +769,13 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
         >
           <span>
             הגדרות מתקדמות
-            <span className="mr-2 font-normal text-slate-400">שיפוצים, עלויות, מכירה, השקעה ואינפלציה</span>
+            <span className="mr-2 font-normal text-slate-500">שיפוצים, עלויות, מכירה, השקעה ואינפלציה</span>
           </span>
           <ChevronDown size={16} className={`transition-transform ${advanced ? "rotate-180" : ""}`} />
         </button>
         {advanced && (
           <div className="space-y-6 px-5 pb-6 sm:px-6">
-            <p className="text-[12px] font-semibold text-slate-400">עלויות הבעלות</p>
+            <p className="text-[12px] font-semibold text-slate-500">עלויות הבעלות</p>
             <SliderInput
               label="רזרבה לשיפוצים והחלפות (משווי הדירה בשנה)"
               kind="percent"
@@ -819,7 +819,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               </p>
             </div>
 
-            <p className="pt-2 text-[12px] font-semibold text-slate-400">הדירה לאורך זמן</p>
+            <p className="pt-2 text-[12px] font-semibold text-slate-500">הדירה לאורך זמן</p>
             <SliderInput
               label="עליית שכר הדירה בשנה"
               kind="percent"
@@ -865,7 +865,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
 
             {(sellsOwnRentDeduction || re.rentsOutBoth) && (
               <>
-                <p className="pt-2 text-[12px] font-semibold text-slate-400">איפה אתם גרים</p>
+                <p className="pt-2 text-[12px] font-semibold text-slate-500">איפה אתם גרים</p>
                 <label className="flex cursor-pointer items-center justify-between gap-3">
                   <span className="text-[15px] text-slate-700">שכר הדירה שלי בערך כמו שכר הדירה שאקבל</span>
                   <Switch label="שכר דירה אוטומטי" checked={inputs.ownRentAuto} onChange={(v) => set("ownRentAuto", v)} accent={RE} />
@@ -888,9 +888,9 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               </>
             )}
 
-            <p className="pt-2 text-[12px] font-semibold text-slate-400">ההשקעה במדד</p>
+            <p className="pt-2 text-[12px] font-semibold text-slate-500">ההשקעה במדד</p>
             <div>
-              <p className="mb-2 text-[15px] text-slate-700">איך משקיעים ב-S&P 500?</p>
+              <p className="mb-2 text-[15px] text-slate-700">דרך ההשקעה במדד בחישוב</p>
               <Segmented
                 ariaLabel="אפיק ההשקעה"
                 accent={SP}
@@ -902,10 +902,9 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
                 ]}
               />
               <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
-                {inputs.spVehicle === "israeli"
-                  ? "מס 25% רק על הרווח שמעל האינפלציה. בחלק מהקרנות המחקות המס צמוד לדולר ולא למדד, וזה כתוב בתשקיף."
-                  : "מס 25% על הרווח מעל שער הדולר: אם הדולר נחלש, משלמים מס גם על רווח שלא קיבלתם בשקלים."}{" "}
-                אפשרות נוספת: קופת גמל להשקעה, שבה המס נדחה עד המשיכה.
+                שתי אפשרויות, וכל אחת ממוסה אחרת. קרן מחקה ישראלית: מס 25% על הרווח שמעל האינפלציה (בחלק מהקרנות המס צמוד לדולר,
+                וזה כתוב בתשקיף). ETF אירי: מס 25% על הרווח מעל שער הדולר, כך שאם הדולר נחלש משלמים מס גם על רווח שלא התקבל בשקלים.
+                אפשרות נוספת, שלא מחושבת כאן: קופת גמל להשקעה, שבה המס נדחה עד המשיכה. לבדוק עם בעל רישיון מה מתאים לכם.
               </p>
               <Sources ids={["sp500Tax"]} className="mt-2" />
             </div>
@@ -917,7 +916,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               accent={SP}
               onChange={(v) => set("spFee", v)}
             />
-            <p className="pt-2 text-[12px] font-semibold text-slate-400">קרן השתלמות ומכירת התיק</p>
+            <p className="pt-2 text-[12px] font-semibold text-slate-500">קרן השתלמות ומכירת התיק</p>
             <SliderInput
               label="מתוך הכסף: קרן השתלמות נזילה"
               kind="currency"
@@ -926,8 +925,8 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               onChange={(v) => set("hishtalmutAmount", v)}
               hint={
                 inputs.hishtalmutAmount > 0
-                  ? `במסלול הדירה היא נמשכת להון העצמי. במסלול ה-S&P היא נשארת בקרן, במסלול מנייתי, בלי מס על הרווח. משיכה שלה עולה כ-${formatILS(sp.hishtalmutTaxSaved)}.`
-                  : "אם חלק מהכסף הוא קרן השתלמות שכבר נזילה. במסלול ה-S&P היא יכולה להישאר בקרן, בלי מס על הרווח."
+                  ? `במסלול הדירה היא נמשכת להון העצמי. במסלול ה-S&P היא נשארת בקרן, במסלול מנייתי, בלי מס על הרווח. משיכה שלה עולה כ-${formatILS(sp.hishtalmutTaxSaved)}. לבדוק עם בעל רישיון מה מתאים לכם.`
+                  : "אם חלק מהכסף הוא קרן השתלמות שכבר נזילה. בקרן, הרווח פטור ממס כל עוד הכסף נשאר בה. לבדוק עם בעל רישיון מה מתאים לכם."
               }
             />
             {inputs.hishtalmutAmount > 0 && (

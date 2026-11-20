@@ -12,12 +12,12 @@ export default function RisksCard() {
     "שער הדולר משפיע על התשואה בשקלים.",
     "הלוואה להשקעה: בירידה חדה הבנק יכול לדרוש החזר או למכור.",
     "קל למכור בכל יום, וגם חלק. מפוזר על 500 חברות, ובלי ניהול.",
-    "קופת גמל להשקעה דוחה את המס עד המשיכה (לא מחושב כאן).",
+    "קופת גמל להשקעה: המס נדחה עד המשיכה (לא מחושב כאן). לבדוק עם בעל רישיון מה מתאים לכם.",
   ];
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
       <h3 className="text-lg font-bold text-slate-900">מה המספרים לא מראים</h3>
-      <p className="mt-0.5 text-[13px] text-slate-500">סיכונים ויתרונות שלא נכנסים לחישוב, אבל חשובים להחלטה</p>
+      <p className="mt-0.5 text-[13px] text-slate-500">סיכונים ויתרונות שלא נכנסים לחישוב, ושכדאי להכיר</p>
       <div className="mt-4 grid gap-5 sm:grid-cols-2">
         <div>
           <h4 className="mb-2 flex items-center gap-2 text-[14px] font-semibold text-re-ink">

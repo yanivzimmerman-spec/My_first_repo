@@ -22,8 +22,10 @@
 :root {
   color-scheme: light;
   --accent-re: #4f46e5;
-  --accent-sp: #059669;
-  --accent-loan: #b45309;
+  --accent-sp: #047857; /* AA on white and on its own 8% tint */
+  --accent-loan: #92400e;
+  /* Secondary text: AA (≥4.5:1) on white and on the slate-50/100 panels */
+  --color-slate-500: #556274;
   --accent-ink: #0f172a;
   --ink-re: #4338ca;
   --ink-sp: #047857;
@@ -137,6 +139,12 @@ body {
 .recharts-wrapper,
 .recharts-wrapper text {
   font-family: var(--font-sans);
+}
+/* Keyboard focus: always visible, in both themes */
+:where(a, button, input, textarea, select, summary, [role="radio"], [role="switch"], [role="tab"], [tabindex]):focus-visible {
+  outline: 3px solid var(--accent-ink);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 .recharts-wrapper *:focus {
   outline: none;

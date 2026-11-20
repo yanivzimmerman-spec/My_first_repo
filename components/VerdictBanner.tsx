@@ -4,6 +4,8 @@ import type { SimResult } from "@/lib/calculator";
 import { formatCompactILS, formatILS, formatPct } from "@/lib/format";
 import { topReasons } from "@/lib/insights";
 import { track } from "@/lib/track";
+import SimNote from "./SimNote";
+import RuleWarnings from "./RuleWarnings";
 
 export interface BreakEven {
   value: number | null;
@@ -14,7 +16,7 @@ export function verdictText(r: SimResult): string {
   const y = r.inputs.years;
   if (r.winner === "tie") return `בטווח של ${y} שנה, שני המסלולים מסתיימים כמעט בתיקו`;
   const name = r.winner === "realEstate" ? "הנדל״ן" : "ה-S&P 500";
-  return `בטווח של ${y} שנה, מסלול ${name} מנצח ב-${formatILS(Math.round(r.difference / 1000) * 1000)} נטו בכיס`;
+  return `לפי ההנחות שבחרתם, בטווח של ${y} שנה מסלול ${name} מנצח ב-${formatILS(Math.round(r.difference / 1000) * 1000)} נטו בכיס`;
 }
 
 function Bar({
@@ -91,6 +93,7 @@ export default function VerdictBanner({
   comboLink = true,
   guideLink = false,
   details = true,
+  onRules,
 }: {
   result: SimResult;
   breakEven: BreakEven;
@@ -101,6 +104,8 @@ export default function VerdictBanner({
   guideLink?: boolean;
   /** Reasons, break-even and links under the bars (the step-by-step version shows them in a menu) */
   details?: boolean;
+  /** Open the "how it's calculated" page from the rules notice */
+  onRules?: () => void;
 }) {
   const r = result;
   // Amounts are in shekels of that year; divide by inflation for today's money
@@ -110,7 +115,7 @@ export default function VerdictBanner({
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7" aria-live="polite">
-      <p className="text-[13px] font-semibold text-slate-500">התשובה</p>
+      <p className="text-[13px] font-semibold text-slate-500">התוצאה לפי ההנחות</p>
       <h2 className="mt-1 text-2xl font-bold leading-snug text-slate-900 [text-wrap:balance] sm:text-[28px]">
         {r.winner === "tie" ? (
           verdictText(r)
@@ -123,6 +128,7 @@ export default function VerdictBanner({
           </>
         )}
       </h2>
+      <SimNote />
       <p className="mt-1 text-[14px] text-slate-500">
         שווי נטו ביום המכירה, אחרי כל המסים וסילוק המשכנתא{r.realEstate.extraLoanPrincipal > 0 ? " וההלוואה" : ""}. הסכומים בשקלים של
         אותה שנה.
@@ -151,6 +157,7 @@ export default function VerdictBanner({
         />
       </div>
 
+      <RuleWarnings apartmentType={r.inputs.apartmentType} onRules={onRules} />
       {details && (
         <VerdictDetails result={r} breakEven={breakEven} breakEvenRent={breakEvenRent} comboLink={comboLink} guideLink={guideLink} />
       )}
@@ -185,6 +192,7 @@ export function VerdictDetails({
               <span
                 className="mt-[7px] h-2 w-2 shrink-0 rounded-full"
                 style={{ background: reason.favors === "realEstate" ? "var(--bar-re)" : "var(--bar-sp)" }}
+                role="img"
                 aria-label={reason.favors === "realEstate" ? "לטובת הדירה" : "לטובת ה-S&P"}
               />
               <span>{reason.text(formatCompactILS)}</span>
@@ -208,7 +216,7 @@ export function VerdictDetails({
             onClick={() => track({ type: "guideLink" })}
             className="mt-2.5 flex items-center gap-1.5 text-[14px] font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
           >
-            ומה עכשיו? לבדוק את הבסיס ולקבל תוכנית מסודרת ←
+            ומה עכשיו? לבדוק את הבסיס ולקבל סיכום מסודר ←
           </a>
         )}
       </div>

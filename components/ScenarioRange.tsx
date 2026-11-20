@@ -29,7 +29,7 @@ export default function ScenarioRange({ pess, base, opt }: { pess: SimResult; ba
               <tr key={label} className={`border-t border-slate-100 ${note ? "" : "bg-slate-50 font-semibold"}`}>
                 <td className="py-2.5 pl-2 text-slate-700">
                   {label}
-                  {note && <span className="block text-[11.5px] font-normal text-slate-400">{note}</span>}
+                  {note && <span className="block text-[11.5px] font-normal text-slate-500">{note}</span>}
                 </td>
                 <td className="py-2.5 text-slate-900">{formatCompactILS(r.realEstate.netWorth)}</td>
                 <td className="py-2.5 text-slate-900">{formatCompactILS(r.sp500.netWorth)}</td>
