@@ -1,4 +1,5 @@
 // Test environment: the step-by-step version (situation → a few numbers → the answer).
+import "./shared";
 import { createRoot } from "react-dom/client";
 import Flow from "../components/Flow";
 import { applyTheme, initialTheme } from "../lib/theme";

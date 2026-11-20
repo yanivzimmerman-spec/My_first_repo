@@ -46,7 +46,7 @@ import { track, PRIVACY_NOTE } from "@/lib/track";
 import { SHARE_ENDING, NEUTRAL_LINE } from "@/lib/config";
 import SimNote from "../SimNote";
 import { InfoLinks, type InfoPage } from "../InfoPages";
-import ComboView from "../ComboView";
+import { ComboView } from "../LazyCharts";
 import { comboCurve, type ComboPoint } from "@/lib/combo";
 
 const STEPS = ["מה יש לכם", "מה חשוב לכם", "הבסיס", "דירה או שוק ההון", "סיכום החישוב", "הכנה עם AI"] as const;

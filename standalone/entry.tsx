@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import "./shared";
 import Simulator from "../components/Simulator";
 import { applyTheme, initialTheme } from "../lib/theme";
 
