@@ -36,7 +36,7 @@ function Card({ q, a, children }: { q: string; a: string; children: React.ReactN
 
 type State = { kind: "loading" } | { kind: "denied" } | { kind: "unavailable" } | { kind: "ok"; report: Report };
 
-/** What testers do with the alpha. Readable by the owner and editors only (db rules). */
+/** What testers do with the alpha. The page is shown to the owner and editors; records hold counters only. */
 export default function StatsView({ onBack }: { onBack?: () => void } = {}) {
   const [state, setState] = useState<State>({ kind: "loading" });
 
