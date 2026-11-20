@@ -339,5 +339,21 @@ ok(bad === 0, "fuzz: 3000+ random/extreme/garbage inputs, all finite, LTV never 
   ok(simulate({ ...big, saleYears: 1 }).sp500.netWorth === once.sp500.netWorth, "spread sale: one year = as before");
 }
 
+// Verdict card (display): today's money and a visible 2% tie rule
+{
+  const { verdictOf, verdictSentence, TIE_SHARE } = await import("../lib/verdict.ts");
+  const r = simulate(DEFAULT_INPUTS);
+  const v = verdictOf(r);
+  const defl = Math.pow(1.02, DEFAULT_INPUTS.years);
+  ok(near(v.reReal, r.realEstate.netWorth / defl, 1e-6) && near(v.spReal, r.sp500.netWorth / defl, 1e-6), "verdict: values in today's money");
+  ok(v.kind === "sp500" && v.word === "S&P 500" && near(v.gapReal, r.difference / defl, 1e-6), "verdict: default case, S&P leads, gap deflated");
+  ok(near(v.tieLimit, TIE_SHARE * Math.max(v.reReal, v.spReal), 1e-6), "verdict: tie limit = 2% of the larger result");
+  const fake = (re: number, sp: number) => ({ ...r, realEstate: { ...r.realEstate, netWorth: re }, sp500: { ...r.sp500, netWorth: sp } });
+  ok(verdictOf(fake(1_000_000, 1_019_000)).kind === "tie" && verdictOf(fake(1_000_000, 1_021_000)).kind === "sp500", "verdict: tie boundary at 2%");
+  ok(verdictOf(fake(1_300_000, 1_000_000)).word === "דירה", "verdict: apartment word");
+  const sent = verdictSentence(v, 15, (n) => String(Math.round(n)));
+  ok(sent.startsWith("בהנחות שהזנתם") && !/כדאי|מומלץ/.test(sent), "verdict sentence: describes, never advises");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll tests passed");

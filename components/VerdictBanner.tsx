@@ -6,17 +6,52 @@ import { topReasons } from "@/lib/insights";
 import { track } from "@/lib/track";
 import SimNote from "./SimNote";
 import RuleWarnings from "./RuleWarnings";
+import { verdictOf, verdictSentence, HISTORIC_APPRECIATION, TIE_SHARE, type Verdict } from "@/lib/verdict";
 
 export interface BreakEven {
   value: number | null;
   below: boolean;
 }
 
+/** Share text: the same sentence as the card, in today's money. */
 export function verdictText(r: SimResult): string {
-  const y = r.inputs.years;
-  if (r.winner === "tie") return `בטווח של ${y} שנה, שני המסלולים מסתיימים כמעט בתיקו`;
-  const name = r.winner === "realEstate" ? "הנדל״ן" : "ה-S&P 500";
-  return `לפי ההנחות שבחרתם, בטווח של ${y} שנה מסלול ${name} מנצח ב-${formatILS(Math.round(r.difference / 1000) * 1000)} נטו בכיס`;
+  return verdictSentence(verdictOf(r), r.inputs.years, (n) => formatILS(Math.round(n / 1000) * 1000));
+}
+
+/** "The number to remember": break-even yearly price growth, and the crossover year. */
+function KeyNumbers({ r, v, breakEven }: { r: SimResult; v: Verdict; breakEven: BreakEven }) {
+  const assumed = formatPct(r.inputs.appreciation, 1);
+  const be =
+    breakEven.value !== null
+      ? formatPct(breakEven.value, 1)
+      : breakEven.below
+        ? "גם בירידה"
+        : "יותר מ-10%";
+  const beNote =
+    breakEven.value !== null
+      ? `הדירה מובילה אם המחירים עולים יותר מזה. הנחתם ${assumed}; ב-25 השנים האחרונות כ-${formatPct(HISTORIC_APPRECIATION, 1)}.`
+      : breakEven.below
+        ? "הדירה מובילה גם אם המחירים לא עולים בכלל."
+        : `גם עלייה של 10% בשנה לא מספיקה לדירה. הנחתם ${assumed}.`;
+  const crossName = r.crossovers.length ? (r.crossovers[r.crossovers.length - 1].leader === "realEstate" ? "הדירה" : "ה-S&P 500") : "";
+  return (
+    <dl className="mt-5 grid gap-2.5 sm:grid-cols-2">
+      <div className="rounded-xl bg-slate-50 px-4 py-3">
+        <dt className="text-[12.5px] font-semibold text-slate-600">נקודת האיזון: עליית מחירים בשנה</dt>
+        <dd className="mt-0.5 text-2xl font-extrabold tabular-nums text-slate-900">
+          <bdi>{be}</bdi>
+        </dd>
+        <dd className="mt-0.5 text-[12.5px] leading-snug text-slate-600">{beNote}</dd>
+      </div>
+      <div className="rounded-xl bg-slate-50 px-4 py-3">
+        <dt className="text-[12.5px] font-semibold text-slate-600">שנת החצייה</dt>
+        <dd className="mt-0.5 text-2xl font-extrabold tabular-nums text-slate-900">{v.crossYear ? `שנה ${v.crossYear}` : "אין"}</dd>
+        <dd className="mt-0.5 text-[12.5px] leading-snug text-slate-600">
+          {v.crossYear ? `מאז ${crossName} מוביל עד הסוף.` : "אותו מסלול מוביל לאורך כל התקופה."}
+        </dd>
+      </div>
+    </dl>
+  );
 }
 
 function Bar({
@@ -30,8 +65,9 @@ function Bar({
   winner,
 }: {
   label: string;
+  /** Nominal, in shekels of the sale year */
   value: number;
-  /** Same amount in today's money */
+  /** The same in today's money (shown first) */
   today: number;
   ret: number;
   max: number;
@@ -39,25 +75,25 @@ function Bar({
   ink: string;
   winner: boolean;
 }) {
-  const w = max > 0 ? Math.max(2, (Math.max(0, value) / max) * 100) : 2;
+  const w = max > 0 ? Math.max(2, (Math.max(0, today) / max) * 100) : 2;
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <span className={`text-[15px] ${winner ? "font-semibold text-slate-900" : "text-slate-600"}`}>{label}</span>
-        <span className="flex items-baseline gap-2">
-          <span className="text-xs tabular-nums" style={{ color: ret >= 0 ? ink : "var(--ink-neg)" }}>
-            <bdi>
-              {ret >= 0 ? "+" : ""}
-              {formatPct(ret, 0)}
-            </bdi>
-          </span>
-          <span className="text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">{formatILS(value)}</span>
-        </span>
+        <span className="text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">{formatILS(today)}</span>
       </div>
-      <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+      <div className="h-3 overflow-hidden rounded-full bg-slate-100" aria-hidden>
         <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${w}%`, background: color }} />
       </div>
-      <p className="mt-1 text-[12px] text-slate-500">בכוח הקנייה של היום: כ-{formatCompactILS(today)}</p>
+      <p className="mt-1 text-[12px] text-slate-500">
+        בשקלים של שנת המכירה: {formatCompactILS(value)}{" "}
+        <span className="tabular-nums" style={{ color: ret >= 0 ? ink : "var(--ink-neg)" }}>
+          <bdi>
+            ({ret >= 0 ? "+" : ""}
+            {formatPct(ret, 0)})
+          </bdi>
+        </span>
+      </p>
     </div>
   );
 }
@@ -108,54 +144,54 @@ export default function VerdictBanner({
   onRules?: () => void;
 }) {
   const r = result;
-  // Amounts are in shekels of that year; divide by inflation for today's money
-  const deflator = Math.pow(1 + r.inputs.inflation / 100, r.inputs.years);
-  const max = Math.max(r.realEstate.netWorth, r.sp500.netWorth);
-  const winInk = r.winner === "realEstate" ? "var(--ink-re)" : r.winner === "sp500" ? "var(--ink-sp)" : "var(--accent-ink)";
+  const v = verdictOf(r);
+  const max = Math.max(v.reReal, v.spReal);
+  const ink = v.kind === "realEstate" ? "var(--ink-re)" : v.kind === "sp500" ? "var(--ink-sp)" : "var(--accent-ink)";
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7" aria-live="polite">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7" aria-live="polite" aria-labelledby="verdict-word">
       <p className="text-[13px] font-semibold text-slate-500">התוצאה לפי ההנחות</p>
-      <h2 className="mt-1 text-2xl font-bold leading-snug text-slate-900 [text-wrap:balance] sm:text-[28px]">
-        {r.winner === "tie" ? (
-          verdictText(r)
-        ) : (
-          <>
-            בטווח של {r.inputs.years} שנה,{" "}
-            <span className="whitespace-nowrap" style={{ color: winInk }}>{r.winner === "realEstate" ? "הדירה" : "ה-S&P 500"}</span>{" "}
-            {r.winner === "realEstate" ? "משאירה" : "משאיר"} לכם{" "}
-            <span className="whitespace-nowrap" style={{ color: winInk }}>{formatCompactILS(r.difference)}</span> יותר
-          </>
-        )}
-      </h2>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 id="verdict-word" className="text-[40px] font-extrabold leading-none tracking-tight sm:text-5xl" style={{ color: ink }}>
+          {v.word}
+        </h2>
+        <p className="text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+          {v.kind === "tie" ? "פער של " : "מוביל ב-"}
+          {formatCompactILS(v.gapReal)}
+          <span className="ms-1.5 text-[14px] font-medium text-slate-500">בערכי היום</span>
+        </p>
+      </div>
+      <p className="mt-3 text-[15px] leading-relaxed text-slate-700">{verdictSentence(v, r.inputs.years, formatCompactILS)}</p>
       <SimNote />
-      <p className="mt-1 text-[14px] text-slate-500">
-        שווי נטו ביום המכירה, אחרי כל המסים וסילוק המשכנתא{r.realEstate.extraLoanPrincipal > 0 ? " וההלוואה" : ""}. הסכומים בשקלים של
-        אותה שנה.
-      </p>
+      <KeyNumbers r={r} v={v} breakEven={breakEven} />
 
       <div className="mt-6 space-y-5">
         <Bar
           label="קונים דירה"
+          today={v.reReal}
           value={r.realEstate.netWorth}
-          today={r.realEstate.netWorth / deflator}
           ret={r.realEstate.totalReturnPct}
           max={max}
           color="var(--bar-re)"
           ink="var(--ink-re)"
-          winner={r.winner === "realEstate"}
+          winner={v.kind === "realEstate"}
         />
         <Bar
           label="S&P 500"
+          today={v.spReal}
           value={r.sp500.netWorth}
-          today={r.sp500.netWorth / deflator}
           ret={r.sp500.totalReturnPct}
           max={max}
           color="var(--bar-sp)"
           ink="var(--ink-sp)"
-          winner={r.winner === "sp500"}
+          winner={v.kind === "sp500"}
         />
       </div>
+      <p className="mt-4 text-[12.5px] leading-relaxed text-slate-500">
+        שווי נטו ביום המכירה, אחרי כל המסים וסילוק המשכנתא{r.realEstate.extraLoanPrincipal > 0 ? " וההלוואה" : ""}, בערכי היום
+        (אינפלציה {formatPct(r.inputs.inflation, 1)} בשנה). תיקו: פער של פחות מ-{Math.round(TIE_SHARE * 100)}% מהסכום הגבוה, כאן
+        פחות מ-{formatCompactILS(v.tieLimit)}.
+      </p>
 
       <RuleWarnings apartmentType={r.inputs.apartmentType} onRules={onRules} />
       {details && (
