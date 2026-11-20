@@ -51,6 +51,10 @@ const KEYS: Record<keyof SimInputs, string> = {
   renewalYear: "ry2",
   incomeCheck: "ic",
   monthlyIncome: "inc",
+  hishtalmutAmount: "hsa",
+  hishtalmutFee: "hsf",
+  oldHomeRent: "ohr",
+  saleYears: "sy",
 };
 
 export function inputsToQuery(inputs: SimInputs): string {

@@ -214,5 +214,31 @@ ok(monthsToMinimum(basics(P({ cash: 150_000, investments: 0, investmentsGain: 0,
   ok(!/profile|answers|equity|income|cash|note/.test(src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "").replace(/PRIVACY_NOTE[\s\S]*?;/, "")), "the tracker never touches financial data or answers");
 }
 
+// Living elsewhere while our apartment is rented out (guided path → simulator)
+{
+  const { rentsOutBothHomes, situationText, profileFromInputs, hishtalmutWithdrawalCost } = await import("../lib/plan.ts");
+  const { DEFAULT_INPUTS } = await import("../lib/calculator.ts");
+  const home = P({ home: "own", homePlan: "invest", cash: 1_400_000, investments: 0, investmentsGain: 0, debt: 0 });
+  const away = { ...home, livesNow: "elsewhere" as const, housingCost: 4_500, oldHomeRent: 5_200 };
+  const xHome = decisionInputs(home, basics(home), 1_700_000);
+  const xAway = decisionInputs(away, basics(away), 1_700_000);
+  ok(!xHome.liveElsewhere && xAway.liveElsewhere && rentsOutBothHomes(away), "lives elsewhere → liveElsewhere, like the two-rentals card");
+  ok(xAway.ownRentPaid === 4_500 && !xAway.ownRentAuto && xAway.oldHomeRent === 5_200, "housing cost and the rent received carry over");
+  ok(simulate(xAway).realEstate.totalRentTax > simulate(xHome).realEstate.totalRentTax, "renting out both apartments brings the shared-ceiling tax");
+  ok(situationText(away).includes("מושכרת") && situationText(away).includes("4,500"), "situation sentence describes it");
+  const r = simulate(xAway);
+  const prompt = advisorPrompt(away, basics(away), { price: 1_700_000, result: r, lev: leverage(r, away, basics(away)), be: breakEvenAppreciation(xAway) }, {});
+  ok(prompt.includes("מושכרת") && prompt.includes("להמשיך לגור במקום אחר"), "AI prompt describes living elsewhere");
+  const back = profileFromInputs({ ...DEFAULT_INPUTS, apartmentType: "additional", liveElsewhere: true, ownRentAuto: false, ownRentPaid: 3_000, oldHomeRent: 4_800 });
+  ok(back.livesNow === "elsewhere" && back.housingCost === 3_000 && back.oldHomeRent === 4_800, "two-rentals in the simulator → lives elsewhere in the guided path");
+  // keren hishtalmut joins as a tax-free part of the S&P track
+  const k = P({ useHishtalmut: true });
+  const xk = decisionInputs(k, basics(k), 1_500_000);
+  ok(xk.hishtalmutAmount === 120_000, "keren used → hishtalmutAmount");
+  ok(hishtalmutWithdrawalCost(k) > 0 && hishtalmutWithdrawalCost(P({ hishtalmut: 0 })) === 0, "withdrawal cost shown only when there is a keren");
+  const kb = profileFromInputs({ ...DEFAULT_INPUTS, equity: 500_000, hishtalmutAmount: 100_000 });
+  ok(kb.cash === 400_000 && kb.hishtalmut === 100_000 && kb.useHishtalmut, "simulator keren → guided path keren");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll planner tests passed");

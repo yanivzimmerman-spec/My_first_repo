@@ -152,7 +152,10 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
 
   // Rent is asked in ₪ per month; the engine keeps it as a yield on the rented apartment's value
   // (the old apartment when it's the one rented out).
-  const rentBase = re.rentsOutOld ? inputs.oldHomeValue : price;
+  // Rent the user already gets on the old apartment replaces its estimate; the rent slider then
+  // prices the new apartment's housing (used for the housing difference)
+  const knownOldRent = re.rentsOutOld && inputs.oldHomeRent > 0;
+  const rentBase = re.rentsOutOld && !knownOldRent ? inputs.oldHomeValue : price;
   const rent = (rentBase * inputs.rentalYield) / 1200;
   const rentBound = {
     min: Math.ceil((rentBase * BOUNDS.rentalYield.min) / 1200 / 50) * 50,
@@ -264,11 +267,30 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               accent={RE}
               onChange={(v) => set("oldHomeValue", v)}
               hint={
-                re.rentsOutBoth
-                  ? "לפי השווי הזה מחושב שכר הדירה על הדירה הישנה, שנספר בתקרת הפטור"
-                  : "לפי השווי הזה מחושב שכר הדירה שתקבלו עליה"
+                inputs.oldHomeRent > 0
+                  ? "שכר הדירה נלקח מהסכום שהזנתם למטה"
+                  : re.rentsOutBoth
+                    ? "לפי השווי הזה מחושב שכר הדירה על הדירה הישנה, שנספר בתקרת הפטור"
+                    : "לפי השווי הזה מחושב שכר הדירה שתקבלו עליה"
               }
             />
+            <div className="mt-5">
+              <SliderInput
+                label="כמה שכר דירה אתם מקבלים היום?"
+                kind="currency"
+                value={inputs.oldHomeRent}
+                bound={BOUNDS.oldHomeRent}
+                accent={RE}
+                onChange={(v) => set("oldHomeRent", v)}
+                hint={
+                  inputs.oldHomeRent > 0
+                    ? re.rentsOutBoth
+                      ? "הסכום המדויק קובע את המס: שכר הדירה של שתי הדירות נספר יחד מול תקרת הפטור (5,654 ₪ בחודש)"
+                      : "לפי הסכום הזה מחושבים שכר הדירה והמס עליו"
+                    : "לא חובה. אם כבר משכירים, הזינו את הסכום. אם תשאירו 0, נחשב לפי שווי הדירה"
+                }
+              />
+            </div>
           </div>
         )}
 
@@ -437,7 +459,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
 
         <div>
           <SliderInput
-            label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : re.rentsOutOld ? "שכר דירה על הדירה הישנה" : re.rentsOutBoth ? "שכר דירה על הדירה החדשה" : "שכר דירה חודשי"}
+            label={re.livesInNew ? "כמה עולה לשכור דירה כזו?" : knownOldRent ? "כמה עולה לשכור דירה כמו החדשה?" : re.rentsOutOld ? "שכר דירה על הדירה הישנה" : re.rentsOutBoth ? "שכר דירה על הדירה החדשה" : "שכר דירה חודשי"}
             kind="currency"
             value={Math.round(rent / 10) * 10}
             bound={rentBound}
@@ -895,6 +917,50 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               accent={SP}
               onChange={(v) => set("spFee", v)}
             />
+            <p className="pt-2 text-[12px] font-semibold text-slate-400">קרן השתלמות ומכירת התיק</p>
+            <SliderInput
+              label="מתוך הכסף: קרן השתלמות נזילה"
+              kind="currency"
+              value={inputs.hishtalmutAmount}
+              bound={{ ...BOUNDS.hishtalmutAmount, max: Math.max(BOUNDS.hishtalmutAmount.step, inputs.equity) }}
+              onChange={(v) => set("hishtalmutAmount", v)}
+              hint={
+                inputs.hishtalmutAmount > 0
+                  ? `במסלול הדירה היא נמשכת להון העצמי. במסלול ה-S&P היא נשארת בקרן, במסלול מנייתי, בלי מס על הרווח. משיכה שלה עולה כ-${formatILS(sp.hishtalmutTaxSaved)}.`
+                  : "אם חלק מהכסף הוא קרן השתלמות שכבר נזילה. במסלול ה-S&P היא יכולה להישאר בקרן, בלי מס על הרווח."
+              }
+            />
+            {inputs.hishtalmutAmount > 0 && (
+              <SliderInput
+                label="דמי ניהול בקרן ההשתלמות"
+                kind="percent"
+                decimals={2}
+                value={inputs.hishtalmutFee}
+                bound={BOUNDS.hishtalmutFee}
+                onChange={(v) => set("hishtalmutFee", v)}
+                hint="אחוז מהצבירה בשנה. ממוצע בשוק: כ-0.6%"
+              />
+            )}
+            <div>
+              <p className="mb-2 text-[15px] text-slate-700">מכירת התיק בסוף התקופה</p>
+              <Segmented
+                ariaLabel="מכירת התיק"
+                value={inputs.saleYears > 1 ? "spread" : "once"}
+                onChange={(v) => set("saleYears", v === "spread" ? Math.max(2, inputs.saleYears > 1 ? inputs.saleYears : 3) : 1)}
+                options={[
+                  { value: "once", label: "למכור בבת אחת" },
+                  { value: "spread", label: "לפרוס על כמה שנים" },
+                ]}
+              />
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+                {inputs.saleYears > 1
+                  ? "מס יסף (5%) נספר כל שנה בנפרד מול הסף השנתי (₪721,560), אז פריסה מקטינה אותו."
+                  : "כל הרווח נספר בשנה אחת לצורך מס יסף (5% על הרווח מעל ₪721,560 בשנה)."}
+              </p>
+            </div>
+            {inputs.saleYears > 1 && (
+              <SliderInput label="על פני כמה שנים?" kind="years" value={inputs.saleYears} bound={{ min: 2, max: BOUNDS.saleYears.max, step: 1 }} onChange={(v) => set("saleYears", Math.round(v))} />
+            )}
             <SliderInput
               label="אינפלציה שנתית"
               kind="percent"

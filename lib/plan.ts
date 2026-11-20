@@ -50,6 +50,12 @@ export interface Profile {
   /** Money needed in the next three years (wedding, car, renovation) */
   bigExpense: number;
   homePlan: HomePlan;
+  /** Keeping the home and buying another: do we live in it, or is it rented out while we live elsewhere */
+  livesNow: "own" | "elsewhere";
+  /** Living elsewhere: what we pay for housing each month (rent; 0 with family or work housing) */
+  housingCost: number;
+  /** Rent we already receive on our apartment, ₪/month (0 = not rented / unknown) */
+  oldHomeRent: number;
   /** Index into RISK_PROFILES */
   risk: number;
   cushionMonths: number;
@@ -71,6 +77,9 @@ export const DEFAULT_PROFILE: Profile = {
   years: 15,
   bigExpense: 0,
   homePlan: "live",
+  livesNow: "own",
+  housingCost: 0,
+  oldHomeRent: 0,
   risk: 2,
   cushionMonths: 6,
 };
@@ -83,18 +92,23 @@ export const DEFAULT_PROFILE: Profile = {
 export function profileFromInputs(x: SimInputs): Profile {
   const own = x.apartmentType !== "single";
   const risk = matchRiskProfile(x);
+  const keren = Math.min(x.hishtalmutAmount, x.equity);
   return {
     ...DEFAULT_PROFILE,
-    cash: x.equity,
+    cash: x.equity - keren,
     investments: 0,
     investmentsGain: 0,
-    hishtalmut: 0,
+    hishtalmut: keren,
+    useHishtalmut: keren > 0,
     debt: 0,
     home: own ? "own" : "none",
     homeValue: x.oldHomeValue,
     homeMortgage: x.apartmentType === "upgrader" ? x.oldHomeMortgage : DEFAULT_PROFILE.homeMortgage,
     // Keeping the current home (any additional-apartment mode) is the guided path's "invest" option
     homePlan: x.apartmentType === "additional" ? "invest" : x.liveInNew ? "live" : "invest",
+    livesNow: x.apartmentType === "additional" && x.liveElsewhere ? "elsewhere" : "own",
+    housingCost: x.ownRentAuto ? 0 : x.ownRentPaid,
+    oldHomeRent: x.oldHomeRent,
     years: x.years,
     risk: risk >= 0 ? risk : DEFAULT_PROFILE.risk,
     income: x.monthlyIncome,
@@ -115,6 +129,8 @@ export const PROFILE_BOUNDS = {
   years: BOUNDS.years,
   bigExpense: { min: 0, max: 1_000_000, step: 10_000 },
   cushionMonths: { min: 3, max: 12, step: 1 },
+  housingCost: { min: 0, max: 30_000, step: 100 },
+  oldHomeRent: { min: 0, max: 30_000, step: 100 },
 } as const;
 
 /** Rule of thumb: a loan above this rate costs more than investing is expected to earn, after tax and risk. */
@@ -193,6 +209,21 @@ export function basics(p: Profile): Basics {
 }
 
 /** Engine inputs for the household, at a given apartment price (manual price). */
+/** Keeping our apartment (rented out), living elsewhere, and buying another to rent out */
+export function rentsOutBothHomes(p: Profile): boolean {
+  return p.home === "own" && p.homePlan === "invest" && p.livesNow === "elsewhere";
+}
+
+/** One sentence describing the household's situation (plan screen and AI prompt). */
+export function situationText(p: Profile): string {
+  if (p.home !== "own")
+    return p.homePlan === "live" ? "אין לנו דירה, ושוקלים לקנות דירה ראשונה ולגור בה" : "אין לנו דירה, ושוקלים לקנות דירה להשקעה ולהמשיך לגור בשכירות";
+  if (p.homePlan === "live") return "יש לנו דירה, ושוקלים למכור אותה ולעבור לדירה אחרת (משפרי דיור)";
+  if (rentsOutBothHomes(p))
+    return `יש לנו דירה שמושכרת${p.oldHomeRent > 0 ? ` ב-${Math.round(p.oldHomeRent).toLocaleString("en-US")} ₪ בחודש` : ""}, אנחנו גרים במקום אחר${p.housingCost > 0 ? ` ומשלמים ${Math.round(p.housingCost).toLocaleString("en-US")} ₪ בחודש על המגורים` : " בלי לשלם שכירות"}, ושוקלים לקנות עוד דירה להשכרה`;
+  return "יש לנו דירה ואנחנו גרים בה, ושוקלים להשאיר אותה ולקנות עוד דירה להשכרה";
+}
+
 export function decisionInputs(p: Profile, b: Basics, propertyPrice: number): SimInputs {
   const risk = RISK_PROFILES[Math.min(RISK_PROFILES.length - 1, Math.max(0, Math.round(p.risk)))].values;
   const own = p.home === "own";
@@ -202,7 +233,11 @@ export function decisionInputs(p: Profile, b: Basics, propertyPrice: number): Si
     ...risk,
     apartmentType,
     liveInNew: p.homePlan === "live",
-    liveElsewhere: false,
+    // Our apartment stays rented out while we live elsewhere: both rents share one exemption ceiling
+    liveElsewhere: rentsOutBothHomes(p),
+    ...(rentsOutBothHomes(p) ? { ownRentAuto: false, ownRentPaid: Math.min(BOUNDS.ownRentPaid.max, p.housingCost) } : {}),
+    oldHomeRent: own ? p.oldHomeRent : 0,
+    hishtalmutAmount: b.hishtalmutUsed,
     oldHomeValue: own ? p.homeValue : DEFAULT_INPUTS.oldHomeValue,
     oldHomeMortgage: own ? Math.min(p.homeMortgage, p.homeValue) : DEFAULT_INPUTS.oldHomeMortgage,
     sellFirst: true,
@@ -343,7 +378,9 @@ export function advisorPrompt(p: Profile, b: Basics, decision: PromptDecision | 
   const planText = own
     ? p.homePlan === "live"
       ? "למכור את הדירה שלנו ולעבור לדירה אחרת (משפרי דיור)"
-      : "להשאיר את הדירה שלנו ולקנות עוד דירה להשכרה"
+      : rentsOutBothHomes(p)
+        ? "להשאיר את הדירה שלנו מושכרת, להמשיך לגור במקום אחר ולקנות עוד דירה להשכרה"
+        : "להשאיר את הדירה שלנו ולקנות עוד דירה להשכרה"
     : p.homePlan === "live"
       ? "לקנות דירה ראשונה ולגור בה"
       : "לקנות דירה ראשונה להשקעה ולהמשיך לגור בשכירות";
@@ -355,6 +392,7 @@ export function advisorPrompt(p: Profile, b: Basics, decision: PromptDecision | 
     `תיק השקעות בשוק ההון (בלי פנסיה): ${ils(p.investments)}${p.investments > 0 ? `, מתוכם רווח שלא מומש: ${ils(Math.min(p.investmentsGain, p.investments))}` : ""}.`,
     `קרן השתלמות נזילה: ${ils(p.hishtalmut)}${p.hishtalmut > 0 ? (p.useHishtalmut ? " (מוכן/ה להשתמש בה)" : " (מעדיף/ה להשאיר אותה)") : ""}.`,
     own ? `דירה: יש לנו דירה ששווה כ-${ils(p.homeValue)}, ונשארו עליה ${ils(p.homeMortgage)} משכנתא.` : "דירה: אין לנו דירה.",
+    `המצב: ${situationText(p)}.`,
     p.debt > 0 ? `הלוואות אחרות: ${ils(p.debt)} בריבית ${p.debtRate}%.` : "הלוואות אחרות: אין.",
     `מה אני שוקל/ת: ${planText}, או להשקיע בשוק ההון.`,
     `טווח: ${p.years} שנה.${p.bigExpense > 0 ? ` הוצאה גדולה צפויה ב-3 השנים הקרובות: ${ils(p.bigExpense)}.` : ""}`,
@@ -457,6 +495,7 @@ export function decodePlan(raw: string | null | undefined): PlanState | undefine
     }
     if (src.home === "own" || src.home === "none") profile.home = src.home;
     if (src.homePlan === "live" || src.homePlan === "invest") profile.homePlan = src.homePlan;
+    if (src.livesNow === "own" || src.livesNow === "elsewhere") profile.livesNow = src.livesNow;
     if (typeof src.useHishtalmut === "boolean") profile.useHishtalmut = src.useHishtalmut;
     const risk = Number(src.risk);
     if (Number.isInteger(risk) && risk >= 0 && risk < RISK_PROFILES.length) profile.risk = risk;
@@ -469,4 +508,18 @@ export function decodePlan(raw: string | null | undefined): PlanState | undefine
   } catch {
     return undefined;
   }
+}
+
+
+/**
+ * What withdrawing the keren hishtalmut costs: left in the fund it grows tax-free; spent on the
+ * apartment, that exemption is gone. Estimated with the engine at the household's horizon and
+ * risk level (the tax a regular fund would owe on the same real gain).
+ */
+export function hishtalmutWithdrawalCost(p: Profile): number {
+  if (!(p.hishtalmut > 0)) return 0;
+  const risk = RISK_PROFILES[Math.min(RISK_PROFILES.length - 1, Math.max(0, Math.round(p.risk)))].values;
+  const amount = Math.min(p.hishtalmut, BOUNDS.equity.max);
+  return simulate({ ...DEFAULT_INPUTS, ...risk, equity: Math.max(amount, MIN_START_CAPITAL), hishtalmutAmount: amount, years: p.years })
+    .sp500.hishtalmutTaxSaved;
 }

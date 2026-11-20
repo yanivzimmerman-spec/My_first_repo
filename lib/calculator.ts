@@ -194,6 +194,18 @@ export interface SimInputs {
   /** Optional bank-approval check: household's net monthly income */
   incomeCheck: boolean;
   monthlyIncome: number;
+  /**
+   * Part of `equity` that is a liquid keren hishtalmut (0 = none). The apartment track withdraws
+   * it into the purchase; the S&P track leaves it in the fund's equity track, where the gain is
+   * tax-free (no capital gains tax, no surtax) and the fund charges its own fee.
+   */
+  hishtalmutAmount: number;
+  /** Keren hishtalmut annual management fee, % of assets */
+  hishtalmutFee: number;
+  /** Rent already received on the current apartment, ₪/month (0 = unknown: value × yield) */
+  oldHomeRent: number;
+  /** Years over which the index portfolios are sold at the end (1 = all at once); surtax per year */
+  saleYears: number;
 }
 
 type NumericKey = {
@@ -231,6 +243,10 @@ export const BOUNDS: Record<NumericKey, Bound> = {
   spLoanRate: { min: 2, max: 15, step: 0.1 },
   spLoanTerm: { min: 1, max: 20, step: 1 },
   monthlyIncome: { min: 5_000, max: 100_000, step: 500 },
+  hishtalmutAmount: { min: 0, max: 3_000_000, step: 10_000 },
+  hishtalmutFee: { min: 0, max: 2, step: 0.05 },
+  oldHomeRent: { min: 0, max: 30_000, step: 100 },
+  saleYears: { min: 1, max: 10, step: 1 },
   ownRentPaid: { min: 0, max: 20_000, step: 100 },
   fxDrift: { min: -3, max: 2, step: 0.1 },
   cpiShare: { min: 0, max: 100, step: 5 },
@@ -296,6 +312,10 @@ export const DEFAULT_INPUTS: SimInputs = {
   liveElsewhere: false,
   incomeCheck: false,
   monthlyIncome: 25_000,
+  hishtalmutAmount: 0,
+  hishtalmutFee: 0.6,
+  oldHomeRent: 0,
+  saleYears: 1,
 };
 
 // ---------------------------------------------------------------------------
@@ -416,6 +436,10 @@ export interface SP500Summary {
   netWorth: number;
   totalReturnPct: number;
   netAnnualReturn: number;
+  /** Keren hishtalmut kept in the fund (S&P track): at the start, at the end, and the tax it avoided */
+  hishtalmutStart: number;
+  hishtalmutValue: number;
+  hishtalmutTaxSaved: number;
 }
 
 export interface Crossover {
@@ -459,6 +483,7 @@ export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApa
   out.spLoanTerm = Math.round(out.spLoanTerm);
   out.monthsToSell = Math.round(out.monthsToSell);
   out.renewalYear = Math.round(out.renewalYear);
+  out.saleYears = Math.round(out.saleYears);
   const bool = (v: unknown, d: boolean) =>
     typeof v === "boolean" ? v : v === "1" || v === "true" ? true : v === "0" || v === "false" ? false : d;
   BOOL_KEYS.forEach((k) => {
@@ -482,6 +507,8 @@ export function sanitizeInputs(raw: Partial<Record<keyof SimInputs | "isFirstApa
   // affordable within the bank limit (a buy-first upgrader may have no bridge at all).
   out.oldHomeMortgage = Math.min(out.oldHomeMortgage, out.oldHomeValue);
   out.equity = Math.max(out.equity, MIN_START_CAPITAL - oldHomeUsableAtPurchase(out));
+  // The keren hishtalmut is part of the cash, never more than it
+  out.hishtalmutAmount = Math.min(out.hishtalmutAmount, out.equity);
   return out;
 }
 
@@ -623,6 +650,16 @@ export function rentBaseValue(inputs: SimInputs, price: number): number {
   return rentsOutOld(inputs) ? inputs.oldHomeValue : price;
 }
 
+/**
+ * Monthly rent of the current apartment in a given year: the rent the household reported, or
+ * its value × the rental yield when not given. Grows with rent growth like any rent.
+ */
+export function oldHomeRentAt(inputs: SimInputs, yearIdx: number): number {
+  const growth = Math.pow(1 + inputs.rentGrowth / 100, yearIdx);
+  const base = inputs.oldHomeRent > 0 ? inputs.oldHomeRent : (inputs.oldHomeValue * inputs.rentalYield) / 1200;
+  return base * growth;
+}
+
 /** Cash available for the purchase: own money (usable on the day) plus the optional down-payment loan. */
 export function purchaseCash(inputs: SimInputs): number {
   return inputs.equity + oldHomeUsableAtPurchase(inputs) + (inputs.loanEnabled ? inputs.loanAmount : 0);
@@ -692,6 +729,13 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   const fx = inputs.fxDrift / 100;
   const spNetAnnual = Math.max(-0.99, (1 + spReturn / 100) * (1 + fx) * (1 - spFee / 100) - 1 - DIVIDEND_DRAG[spVehicle]);
   const spMonthly = Math.pow(1 + spNetAnnual, 1 / 12) - 1;
+  // Keren hishtalmut left in its equity track (S&P track only): same market return, its own fee, no tax
+  const hishStart = Math.min(inputs.hishtalmutAmount, inputs.equity);
+  const hishNetAnnual = Math.max(
+    -0.99,
+    (1 + spReturn / 100) * (1 + fx) * (1 - inputs.hishtalmutFee / 100) - 1 - DIVIDEND_DRAG.israeli,
+  );
+  const hishMonthly = Math.pow(1 + hishNetAnnual, 1 / 12) - 1;
   // Cost basis: Israeli tracking fund → CPI; Irish ETF → the dollar rate (section 88)
   const basisMonthly = spVehicle === "israeli" ? inflMonthly : Math.pow(1 + fx, 1 / 12) - 1;
   // Building-age drag lowers the apartment's growth below the market index
@@ -749,8 +793,9 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   let balance = loanAmount;
   let firstPayment = 0;
   let extraBalance = extraPrincipal;
-  let sp = equity + spLoanPrincipal; // borrowed money is invested on day one
-  let spBasis = equity + spLoanPrincipal;
+  let sp = equity - hishStart + spLoanPrincipal; // borrowed money is invested on day one
+  let spBasis = equity - hishStart + spLoanPrincipal;
+  let hish = hishStart; // stays in the keren hishtalmut, tax-free
   let spContrib = 0; // own money added monthly to the S&P track
   let spLoanBalance = spLoanPrincipal;
   let spLoanInterest = 0;
@@ -823,15 +868,21 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     const spGain = Math.max(0, sp - spBasis);
     const spTax = CAPITAL_GAINS_TAX_RATE * spGain;
 
-    // מס יסף (sale in a single year, no other income assumed)
+    // מס יסף (no other income assumed). The index portfolios are sold in one year, or spread over
+    // saleYears equal parts, each year against that year's threshold; the apartment sale falls in year one.
     const threshold = SURTAX_THRESHOLD * idx;
     const reSaleInSurtax = taxableGain > 0 && propertyValue > SURTAX_RE_SALE_THRESHOLD * idx;
-    const reSurtax = surtax((reSaleInSurtax ? taxableGain : 0) + sideGain, threshold);
-    const spSurtax = surtax(spGain, threshold);
+    const k = Math.max(1, inputs.saleYears);
+    const spreadSurtax = (portfolioGain: number, firstYearExtra = 0) =>
+      k <= 1
+        ? surtax(firstYearExtra + portfolioGain, threshold)
+        : surtax(firstYearExtra + portfolioGain / k, threshold) + (k - 1) * surtax(portfolioGain / k, threshold);
+    const reSurtax = spreadSurtax(sideGain, reSaleInSurtax ? taxableGain : 0);
+    const spSurtax = spreadSurtax(spGain);
 
     const realEstate =
       propertyValue - sellCosts - levy - sellDelay - balance - extraBalance - shevach - reSurtax + (side - sideTax) + idleCash;
-    const sp500 = sp - spTax - spSurtax - spLoanBalance;
+    const sp500 = sp - spTax - spSurtax - spLoanBalance + hish;
     return {
       point: {
         year: Math.round(t),
@@ -931,7 +982,11 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     // while renting out the old one, they rent elsewhere meanwhile.
     const building = underConstruction(m);
     const newApartmentIdle = building && !rentsOutOld(inputs);
-    const rentGross = newApartmentIdle ? 0 : Math.max(0, ((rentBase * rentalYield) / 100 / 12) * growth);
+    const rentGross = newApartmentIdle
+      ? 0
+      : rentsOutOld(inputs)
+        ? Math.max(0, oldHomeRentAt(inputs, yearIdx))
+        : Math.max(0, ((rentBase * rentalYield) / 100 / 12) * growth);
     const collected = living ? rentGross : rentGross * (1 - VACANCY_MONTHS_PER_YEAR / 12);
     const rentElsewhereWhileBuilding = building && rentsOutOld(inputs) ? ((price * rentalYield) / 1200) * growth : 0;
     if (building) renewalIncomeLost += newApartmentIdle ? ((rentBase * rentalYield) / 1200) * growth : rentElsewhereWhileBuilding;
@@ -943,10 +998,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     if (rentsOutBoth(inputs)) {
       // The old apartment's rent uses the household's exemption first (it's rented in both
       // tracks); the new apartment adds only the extra tax on the combined rent.
-      const oldCollected =
-        ((inputs.oldHomeValue * rentalYield) / 100 / 12) *
-        Math.pow(1 + rentGrowth / 100, yearIdx) *
-        (1 - VACANCY_MONTHS_PER_YEAR / 12);
+      const oldCollected = oldHomeRentAt(inputs, yearIdx) * (1 - VACANCY_MONTHS_PER_YEAR / 12);
       rentTax = monthlyRentTax(oldCollected + collected, ceiling) - monthlyRentTax(oldCollected, ceiling);
     }
     // Owner costs
@@ -961,7 +1013,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     // old apartment, so the difference in housing (new rent − old rent) counts too. Moving somewhere
     // cheaper is a cost; somewhere better is a benefit.
     const housingDiff = rentsOutOld(inputs)
-      ? (((price - inputs.oldHomeValue) * rentalYield) / 1200) * growth
+      ? ((price * rentalYield) / 1200) * growth - oldHomeRentAt(inputs, yearIdx)
       : 0;
     housingDiffTotal += housingDiff;
     const rentNet = collected - rentTax - ownership + housingDiff;
@@ -977,6 +1029,7 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
 
     // 4. Grow funds; index cost bases
     sp *= 1 + spMonthly;
+    hish *= 1 + hishMonthly;
     side *= 1 + spMonthly;
     spBasis *= 1 + basisMonthly;
     sideBasis *= 1 + basisMonthly;
@@ -1094,6 +1147,8 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
   };
 
   const spCash = equity + spContrib;
+  // What leaving the keren in place is worth: the tax a regular fund would owe on the same real gain
+  const hishRealGain = Math.max(0, hish - hishStart * Math.pow(1 + inflMonthly, totalMonths));
   const sp500: SP500Summary = {
     vehicle: spVehicle,
     loanPrincipal: spLoanPrincipal,
@@ -1104,8 +1159,11 @@ export function simulate(rawInputs: Partial<SimInputs>): SimResult {
     initialInvestment: equity,
     monthlyContributionsTotal: spContrib,
     totalCashInvested: spCash,
-    grossValue: sp,
-    grossGain: sp - spLoanBalance - spCash,
+    grossValue: sp + hish,
+    grossGain: sp + hish - spLoanBalance - spCash,
+    hishtalmutStart: hishStart,
+    hishtalmutValue: hish,
+    hishtalmutTaxSaved: CAPITAL_GAINS_TAX_RATE * hishRealGain,
     capitalGainsTax: last.spTax,
     surtax: last.spSurtax,
     netWorth: last.point.sp500,
@@ -1163,6 +1221,8 @@ export function breakEvenAppreciation(inputs: SimInputs): { value: number | null
  * the rent saved. Null when outside the slider's 1%–7% yield range.
  */
 export function breakEvenRent(inputs: SimInputs): { value: number | null; below: boolean } {
+  // A rent the household already gets is a fact, not an assumption to vary
+  if (rentsOutOld(sanitizeInputs(inputs)) && inputs.oldHomeRent > 0) return { value: null, below: false };
   const r = breakEven(inputs, "rentalYield");
   if (r.value === null) return r;
   const x = sanitizeInputs(inputs);

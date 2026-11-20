@@ -62,3 +62,11 @@ The full source review is in a local research report; each rule below was checke
 - **Not modelled**: US estate tax on US-domiciled ETFs, tax-deferred savings wrappers (קופת גמל להשקעה), the old home's מס שבח above the exemption ceiling, bridge-loan interest, and the old mortgage in the payment-to-income check.
 
 This is a simulation, not investment advice.
+
+### Optional inputs added Nov 2026 (all off by default; the six situation cards are unchanged)
+- **Keren hishtalmut** (`hishtalmutAmount`, `hishtalmutFee` 0.6%): part of the cash. The apartment track withdraws it into the purchase; the S&P track leaves it in the fund's equity track: same market return, its own fee, no capital gains tax and no surtax. The breakdown shows what withdrawing it costs (25% of the real gain a regular fund would be taxed on).
+- **Rent already received on the current apartment** (`oldHomeRent`, 0 = estimate from value × yield): used for that apartment's rent, the shared exemption ceiling and the tax (move-and-rent-old, two-rentals).
+- **Spreading the portfolio sale** (`saleYears`, 1 = all at once): the index portfolios are sold in equal parts over N years and the 5% surtax is computed per year against the yearly threshold; the apartment sale stays in year one.
+- **Guided path**: "where do you live today?" (own apartment / elsewhere with ours rented out → `liveElsewhere`), the housing cost (`ownRentPaid`) and the rent received.
+
+`scripts/test-cards.ts` pins the six cards' reference values (balanced profile) and checks 3,000 random inputs and monotonicity.

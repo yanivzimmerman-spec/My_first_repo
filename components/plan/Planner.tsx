@@ -24,6 +24,8 @@ import {
   leverage,
   monthsToMinimum,
   advisorPrompt,
+  hishtalmutWithdrawalCost,
+  situationText,
   ADVISOR_QUESTIONS,
   DEFAULT_PROFILE,
   PROFILE_BOUNDS as B,
@@ -577,10 +579,52 @@ function StepGoals({ p, set }: { p: Profile; set: SetFn }) {
               active={p.homePlan === "invest"}
               onClick={() => set("homePlan", "invest")}
               title={own ? "עוד דירה להשקעה" : "דירה להשקעה"}
-              text={own ? "נשארים בדירה שלנו וקונים עוד אחת להשכרה" : "קונים ומשכירים, וממשיכים לגור בשכירות"}
+              text={own ? "משאירים את הדירה שלנו וקונים עוד אחת להשכרה" : "קונים ומשכירים, וממשיכים לגור בשכירות"}
             />
           </div>
         </Group>
+        {own && p.homePlan === "invest" && (
+          <Group title="איפה אתם גרים היום?">
+            <div role="radiogroup" aria-label="איפה אתם גרים היום" className="grid gap-2.5 sm:grid-cols-2">
+              <Choice
+                active={p.livesNow === "own"}
+                onClick={() => set("livesNow", "own")}
+                title="בדירה שלנו"
+                text="ממשיכים לגור בה, והדירה החדשה מושכרת"
+              />
+              <Choice
+                active={p.livesNow === "elsewhere"}
+                onClick={() => set("livesNow", "elsewhere")}
+                title="במקום אחר, והדירה שלנו מושכרת"
+                text="בשכירות, אצל משפחה או בדיור של העבודה"
+              />
+            </div>
+            {p.livesNow === "elsewhere" && (
+              <>
+                <SliderInput
+                  label="כמה אתם משלמים על המגורים בחודש?"
+                  hint="שכירות. אם גרים אצל משפחה או בדיור של העבודה, השאירו 0"
+                  kind="currency"
+                  value={p.housingCost}
+                  bound={B.housingCost}
+                  onChange={(v) => set("housingCost", v)}
+                />
+                <SliderInput
+                  label="כמה שכר דירה אתם מקבלים היום?"
+                  hint={
+                    p.oldHomeRent > 0
+                      ? "שכר הדירה של שתי הדירות נספר יחד מול תקרת הפטור (5,654 ₪ בחודש), אז גם הפרש קטן משנה את המס"
+                      : "לא חובה. אם תשאירו 0, נחשב לפי שווי הדירה"
+                  }
+                  kind="currency"
+                  value={p.oldHomeRent}
+                  bound={B.oldHomeRent}
+                  onChange={(v) => set("oldHomeRent", v)}
+                />
+              </>
+            )}
+          </Group>
+        )}
         <Group title="זמן ותוכניות">
           <SliderInput label="לכמה שנים?" hint="עד שתרצו להשתמש בכסף" kind="years" value={p.years} bound={B.years} onChange={(v) => set("years", v)} />
           <SliderInput
@@ -628,6 +672,7 @@ function StepGoals({ p, set }: { p: Profile; set: SetFn }) {
 
 function StepBasics({ p, set, b }: { p: Profile; set: SetFn; b: Basics }) {
   const upgraderEquity = p.home === "own" && p.homePlan === "live" ? Math.max(0, p.homeValue - p.homeMortgage) : 0;
+  const kerenCost = useMemo(() => hishtalmutWithdrawalCost(p), [p.hishtalmut, p.years, p.risk]); // eslint-disable-line react-hooks/exhaustive-deps
   const months = monthsToMinimum(b);
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
@@ -681,8 +726,13 @@ function StepBasics({ p, set, b }: { p: Profile; set: SetFn; b: Basics }) {
           <LadderItem icon={<PiggyBank size={17} />} title="קרן השתלמות" done={!p.useHishtalmut}>
             <p>
               {p.useHishtalmut
-                ? "צירפתם את הקרן לסכום. שימו לב: כסף שנשאר בקרן ממשיך להרוויח בלי מס, וזה יתרון שקשה להשיג במקום אחר."
-                : "השארנו אותה בצד: הרווחים בה פטורים ממס, וחבל לוותר על זה. אם תרצו, אפשר לצרף אותה."}
+                ? "צירפתם את הקרן לסכום. בהשוואה, מסלול הדירה מושך אותה להון העצמי, ומסלול ה-S&P משאיר אותה בקרן, במסלול מנייתי, בלי מס."
+                : "השארנו אותה בצד: הרווחים בה פטורים ממס, וחבל לוותר על זה. אם תרצו, אפשר לצרף אותה."}{" "}
+              {kerenCost > 0 && (
+                <>
+                  כמה עולה למשוך אותה: בערך {c(kerenCost)} במס שהייתם משלמים על אותו רווח בתיק רגיל, לאורך {p.years} שנה.
+                </>
+              )}
             </p>
             <div className="mt-2.5 flex items-center gap-2.5">
               <Switch checked={p.useHishtalmut} onChange={(v) => set("useHishtalmut", v)} label={`לצרף את קרן ההשתלמות (${c(p.hishtalmut)})`} />
@@ -859,6 +909,7 @@ function StepPlan({
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
         <h2 className="text-xl font-bold text-slate-900">התוכנית שלכם, לפי הסדר</h2>
         <p className="mt-1 text-[13px] text-slate-500">סיכום של החישוב לפי הנתונים וההנחות שלכם. לא המלצה אישית.</p>
+        <p className="mt-3 rounded-lg bg-slate-50 px-3.5 py-2.5 text-[14px] leading-relaxed text-slate-700">המצב שלכם: {situationText(p)}.</p>
         <ol className="mt-4 space-y-3">
           {steps.map((s, i) => (
             <li key={i} className="flex gap-3 text-[14.5px] leading-relaxed text-slate-800">

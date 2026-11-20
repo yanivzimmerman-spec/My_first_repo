@@ -139,7 +139,11 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
   const valueOf = (lots: Lot[]) => lots.reduce((s, l) => s + l.amount * Math.pow(1 + rM, N - l.month), 0);
   const basisOf = (lots: Lot[]) => lots.reduce((s, l) => s + l.amount * Math.pow(1 + bM, N - l.month), 0);
 
-  const spLots: Lot[] = [{ amount: ownStart + spLoanP, month: 0 }];
+  // keren hishtalmut: the S&P track leaves it in the fund (own fee, tax-free); the apartment track spends it
+  const keren = Math.min(x.hishtalmutAmount, x.equity);
+  const kerenAnnual = Math.max(-0.99, (1 + x.spReturn / 100) * (1 + fx) * (1 - x.hishtalmutFee / 100) - 1 - 0.0032);
+  const kerenEnd = keren * Math.pow(1 + kerenAnnual, x.years);
+  const spLots: Lot[] = [{ amount: ownStart - keren + spLoanP, month: 0 }];
   const sideLots: Lot[] = extraAtStart > 0 ? [{ amount: extraAtStart, month: 0 }] : [];
   let idle = 0;
   let rentTaxTotal = 0;
@@ -153,8 +157,9 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
     const rebuilding = building(m);
     const newIdle = rebuilding && !rentOld; // the new apartment yields nothing while rebuilt
     // Additional apartment + moving in: the old apartment is the one rented out
-    const rentedValue = rentOld ? x.oldHomeValue : price;
-    const gross = newIdle ? 0 : ((rentedValue * x.rentalYield) / 1200) * growth;
+    // the old apartment's rent: what the household reported, else its value × the yield
+    const oldRent = (x.oldHomeRent > 0 ? x.oldHomeRent : (x.oldHomeValue * x.rentalYield) / 1200) * growth;
+    const gross = newIdle ? 0 : rentOld ? oldRent : ((price * x.rentalYield) / 1200) * growth;
     const received = living ? gross : (gross * 11) / 12;
     const rentElsewhere = rebuilding && rentOld ? ((price * x.rentalYield) / 1200) * growth : 0;
     const ceiling = 5_654 * Math.pow(1 + x.inflation / 100, y); // frozen in year 1 (2027), indexed after
@@ -166,7 +171,7 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
     let rentTax = 0;
     if (both) {
       // the old apartment is rented in both tracks; count only the extra tax the new rent causes
-      const oldReceived = (((x.oldHomeValue * x.rentalYield) / 1200) * growth * 11) / 12;
+      const oldReceived = (oldRent * 11) / 12;
       rentTax = householdTax(oldReceived + received, 0) - householdTax(oldReceived, 0);
     } else if (!living) {
       const ownRent = additional ? 0 : x.ownRentAuto ? gross : x.ownRentPaid;
@@ -183,7 +188,7 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
       (100 * balStart) / 1e6 +
       rentElsewhere;
     // moving into the new apartment: the S&P track lives in the old one, so count the housing difference
-    const housing = rentOld ? (((price - x.oldHomeValue) * x.rentalYield) / 1200) * growth : 0;
+    const housing = rentOld ? ((price * x.rentalYield) / 1200) * growth - oldRent : 0;
     const netRent = received - rentTax - running + housing;
 
     const apartmentOut = mortPay(m) + dpLoan.paymentIn(m) - netRent;
@@ -223,11 +228,14 @@ export function referenceModel(raw: Partial<SimInputs>): RefResult {
   const spGain = Math.max(0, spV - basisOf(spLots));
   const threshold = 721_560 * tIdx;
   const reBase = (taxable > 0 && value > 5_385_285 * tIdx ? taxable : 0) + sideGain;
-  const reSurtax = 0.05 * Math.max(0, reBase - threshold);
-  const spSurtax = 0.05 * Math.max(0, spGain - threshold);
+  // portfolios sold over saleYears equal parts, the surtax counted per year; the apartment sale is in year one
+  const yrs = x.saleYears;
+  const st = (v: number) => 0.05 * Math.max(0, v - threshold);
+  const reSurtax = st(reBase - sideGain + sideGain / yrs) + (yrs - 1) * st(sideGain / yrs);
+  const spSurtax = yrs * st(spGain / yrs);
 
   const realEstate =
     value - sellCosts - levy - sellDelay - mortBal(N) - dpLoan.balanceAfter(N) - shevach - reSurtax + sideV - 0.25 * sideGain + idle;
-  const sp500 = spV - 0.25 * spGain - spSurtax - spLoan.balanceAfter(N);
+  const sp500 = spV - 0.25 * spGain - spSurtax - spLoan.balanceAfter(N) + kerenEnd;
   return { price, realEstate, sp500, rentTaxTotal, shevach, spTax: 0.25 * spGain };
 }

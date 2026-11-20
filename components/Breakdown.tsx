@@ -46,6 +46,16 @@ export default function Breakdown({ result }: { result: SimResult }) {
             ]
           : []),
         { label: "הון עצמי התחלתי", re: re.startCapital, sp: sp.initialInvestment },
+        ...(sp.hishtalmutStart > 0
+          ? [
+              {
+                label: "מתוכו קרן השתלמות",
+                re: "נמשכת להון",
+                sp: "נשארת בקרן",
+                note: "במסלול ה-S&P היא נשארת בקרן, במסלול מנייתי, ואין מס על הרווח בה",
+              } as Line,
+            ]
+          : []),
         ...(loan
           ? [{ label: "הלוואה להון העצמי", re: re.extraLoanPrincipal, sp: null, note: "כסף מושאל, לא נספר כהשקעה שלכם" } as Line]
           : []),
@@ -213,8 +223,21 @@ export default function Breakdown({ result }: { result: SimResult }) {
           re: re.surtax,
           sp: sp.surtax,
           negative: true,
-          note: "על רווח הון מעל ₪721,560 בשנת המכירה",
+          note:
+            result.inputs.saleYears > 1
+              ? `על רווח הון מעל ₪721,560 בשנה. התיק נמכר על פני ${result.inputs.saleYears} שנים, והמס מחושב לכל שנה`
+              : "על רווח הון מעל ₪721,560 בשנת המכירה",
         },
+        ...(sp.hishtalmutStart > 0
+          ? [
+              {
+                label: "קרן השתלמות בסוף התקופה",
+                re: null,
+                sp: sp.hishtalmutValue,
+                note: `פטורה ממס. משיכה שלה לדירה עולה כ-${formatILS(sp.hishtalmutTaxSaved)} במס שהיה משולם על אותו רווח בתיק רגיל`,
+              } as Line,
+            ]
+          : []),
       ],
     },
   ];
@@ -276,8 +299,11 @@ export default function Breakdown({ result }: { result: SimResult }) {
             </tbody>
           </table>
           <p className="mt-3 px-2 text-[11px] leading-relaxed text-slate-400">
-            הנחות: מדרגות מס רכישה הקפואות עד 15.1.2028 · תקרות המס קפואות עד סוף 2027 וצמודות למדד אחר כך · מכירה בשנה אחת
-            ובלי הכנסות נוספות באותה שנה (לצורך מס יסף) ·{" "}
+            הנחות: מדרגות מס רכישה הקפואות עד 15.1.2028 · תקרות המס קפואות עד סוף 2027 וצמודות למדד אחר כך ·{" "}
+            {result.inputs.saleYears > 1
+              ? `התיק נמכר על פני ${result.inputs.saleYears} שנים בחלקים שווים, ומס היסף מחושב לכל שנה מול התקרה השנתית; הדירה נמכרת בשנה הראשונה`
+              : "הדירה והתיק נמכרים בשנה אחת"}
+            , בלי הכנסות נוספות באותן שנים (לצורך מס יסף) ·{" "}
             {result.inputs.depreciation ? "כולל פחת רעיוני (לפי בחירתכם)" : "בלי פחת רעיוני (אפשר להוסיף בהגדרות המתקדמות)"} ·
             אינפלציה {result.inputs.inflation}% בשנה · כל הסכומים בשקלים של אותה שנה.
           </p>

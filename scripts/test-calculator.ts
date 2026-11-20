@@ -300,5 +300,44 @@ ok(bad === 0, "fuzz: 3000+ random/extreme/garbage inputs, all finite, LTV never 
   ok(eq("firstHome") < eq("secondInvest"), "a second apartment needs more cash (50% down + 8% tax)");
 }
 
+// Keren hishtalmut kept in the fund in the S&P track
+{
+  const base = { ...DEFAULT_INPUTS, equity: 800_000, propertyPrice: 1_900_000, liveInNew: true };
+  const without = simulate(base);
+  const withK = simulate({ ...base, hishtalmutAmount: 200_000 });
+  ok(withK.realEstate.netWorth === without.realEstate.netWorth, "keren: the apartment track is unchanged (the money is withdrawn into the purchase)");
+  ok(withK.sp500.netWorth > without.sp500.netWorth, "keren: the S&P track gains from the tax-free part");
+  const r = (1 + 0.095) * (1 - 0.005) * (1 - 0.006) - 1 - 0.0032;
+  ok(near(withK.sp500.hishtalmutValue, 200_000 * Math.pow(1 + r, 15), 1), "keren: grows at the market return minus its own 0.6% fee");
+  ok(simulate({ ...base, hishtalmutAmount: 200_000, hishtalmutFee: 1.2 }).sp500.netWorth < withK.sp500.netWorth, "keren: a higher fee lowers the result");
+  ok(simulate({ ...base, hishtalmutAmount: 5_000_000 }).sp500.hishtalmutStart === 800_000, "keren: never more than the cash itself");
+  ok(withK.sp500.hishtalmutTaxSaved > 0 && without.sp500.hishtalmutTaxSaved === 0, "keren: reports the tax it avoided");
+}
+
+// Rent already received on the current apartment
+{
+  const both = { ...DEFAULT_INPUTS, apartmentType: "additional" as const, liveElsewhere: true, equity: 1_100_000, propertyPrice: 1_700_000 };
+  const auto = simulate(both);
+  const sameRent = simulate({ ...both, oldHomeRent: (both.oldHomeValue * both.rentalYield) / 1200 });
+  ok(near(sameRent.realEstate.totalRentTax, auto.realEstate.totalRentTax, 0.01), "old-home rent: entering the computed rent changes nothing");
+  ok(simulate({ ...both, oldHomeRent: 3_000 }).realEstate.totalRentTax < simulate({ ...both, oldHomeRent: 5_500 }).realEstate.totalRentTax, "old-home rent: closer to the ceiling → more tax on the new apartment");
+  const move = { ...DEFAULT_INPUTS, apartmentType: "additional" as const, liveInNew: true, equity: 1_500_000, propertyPrice: 2_400_000 };
+  ok(near(simulate({ ...move, oldHomeRent: 6_200 }).realEstate.initialMonthlyRentGross, 6_200, 0.01), "old-home rent: moving out and renting it uses the exact rent");
+  ok(near(simulate({ ...move, oldHomeRent: (move.oldHomeValue * move.rentalYield) / 1200 }).realEstate.netWorth, simulate(move).realEstate.netWorth, 0.01), "old-home rent: the computed rent entered by hand gives the same result");
+  ok(breakEvenRent({ ...move, oldHomeRent: 6_200 }).value === null, "old-home rent: a known rent isn't varied in the break-even sentence");
+}
+
+// Selling the portfolio over several years
+{
+  const big = { ...DEFAULT_INPUTS, equity: 2_500_000, propertyPrice: 4_000_000, years: 25 };
+  const once = simulate(big);
+  const spread = simulate({ ...big, saleYears: 5 });
+  ok(once.sp500.surtax > 0, "spread sale: a large gain pays surtax when sold at once");
+  ok(spread.sp500.surtax < once.sp500.surtax && spread.sp500.netWorth > once.sp500.netWorth, "spread sale: less surtax, more left");
+  const g = once.sp500.grossValue - once.sp500.totalCashInvested; // rough check of the formula's shape
+  ok(g > 0 && spread.sp500.surtax >= 0, "spread sale: never negative");
+  ok(simulate({ ...big, saleYears: 1 }).sp500.netWorth === once.sp500.netWorth, "spread sale: one year = as before");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll tests passed");
