@@ -16,6 +16,7 @@ import { SCENARIO_DELTAS, SITUATIONS, matchSituation, situationInputs } from "@/
 import { profileFromInputs, type Profile } from "@/lib/plan";
 import { track, startTracking, PRIVACY_NOTE } from "@/lib/track";
 import { formatILS } from "@/lib/format";
+import { inputsToQuery, queryToInputs } from "@/lib/url";
 import SituationPicker from "./SituationPicker";
 import VerdictBanner, { VerdictDetails, verdictText } from "./VerdictBanner";
 import ScenarioRange from "./ScenarioRange";
@@ -34,6 +35,8 @@ import { InfoPageView, InfoLinks, INFO_PAGES, type InfoPage } from "./InfoPages"
 import { CONTACT_EMAIL as FEEDBACK_EMAIL, SHARE_ENDING, LEGAL_NOTE, NEUTRAL_LINE } from "@/lib/config";
 
 const START: SimInputs = { ...DEFAULT_INPUTS, ...situationInputs(SITUATIONS[0]) };
+/** The claude.ai artifact build: the viewer's address isn't the page's, so no link sharing there */
+const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
 type QView = "money" | "home" | "market" | "extras";
 type View = "pick" | QView | "result" | "plan" | "stats" | InfoPage;
 
@@ -128,6 +131,30 @@ function Fold({ title, hint, children, onOpen }: { title: string; hint?: string;
  */
 export default function Flow() {
   const [inputs, setInputs] = useState<SimInputs>(START);
+  // A shared scenario (?e=…&p=…): open it as it was; then keep the address in step
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    if (!STANDALONE) {
+      const fromUrl = queryToInputs(window.location.search);
+      if (fromUrl) setInputs(fromUrl);
+    }
+    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!hydrated || STANDALONE) return;
+    const q = inputsToQuery(inputs);
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash}`);
+  }, [inputs, hydrated]);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyLink = async () => {
+    track({ type: "share" });
+    const url = new URL(window.location.href);
+    url.hash = "result";
+    if (await copyText(url.toString())) {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2200);
+    }
+  };
   const [theme, toggleTheme] = useTheme();
   const [view, setView] = useState<View>("pick");
   const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle");
@@ -216,6 +243,7 @@ export default function Flow() {
       `🏠 קונים דירה: ${formatILS(re.netWorth)} נטו`,
       `📈 S&P 500: ${formatILS(result.sp500.netWorth)} נטו`,
       `(${situation?.title ?? "מצב מותאם"}, הון ${formatILS(re.startCapital)}, דירה ב-${formatILS(re.propertyPrice)})`,
+      ...(STANDALONE ? [] : [window.location.href.replace(/#.*$/, "") + "#result"]),
       SHARE_ENDING,
     ]
       .join("\n")
@@ -445,8 +473,18 @@ export default function Flow() {
                     className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-[14px] font-semibold text-slate-700 hover:border-slate-500"
                   >
                     {copied === "ok" ? <Check size={15} /> : <Share2 size={15} />}
-                    {copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "שיתוף התוצאה"}
+                    {copied === "ok" ? "הועתק!" : copied === "fail" ? "ההעתקה נכשלה" : "העתקת סיכום"}
                   </button>
+                  {!STANDALONE && (
+                    <button
+                      type="button"
+                      onClick={copyLink}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-[14px] font-semibold text-slate-700 hover:border-slate-500"
+                    >
+                      {linkCopied ? <Check size={15} /> : <Share2 size={15} />}
+                      {linkCopied ? "הקישור הועתק" : "קישור לתרחיש"}
+                    </button>
+                  )}
                   <button type="button" onClick={() => go("pick")} className="px-3 py-2 text-[14px] text-slate-600 hover:text-slate-900">
                     בחירת מצב אחר
                   </button>
