@@ -445,6 +445,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
             accent={RE}
             disabled={inputs.autoRate}
             onChange={(v) => set("mortgageRate", v)}
+            info="כלל אצבע: כ-4.3% למשכנתא ל-10 שנים, ועוד 0.03% לכל שנה נוספת (כ-4.75% ל-25 שנה). אם יש לכם הצעה מבנק, הזינו אותה."
             hint={
               inputs.autoRate
                 ? `כלל אצבע לתקופה של ${inputs.mortgageTerm} שנה: כ-4.3% ל-10 שנים ועוד 0.03% לכל שנה נוספת.`
@@ -465,6 +466,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
             bound={rentBound}
             accent={RE}
             onChange={(v) => set("rentalYield", Math.min(BOUNDS.rentalYield.max, Math.max(BOUNDS.rentalYield.min, (v * 1200) / rentBase)))}
+            info="ברירת המחדל: שכר דירה של כ-3.2% משווי הדירה בשנה. בישראל זה נע בדרך כלל בין 2.5% ל-3.5%, תלוי באזור."
             hint={
               re.livesInNew ? (
                 <>
@@ -498,6 +500,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
           bound={BOUNDS.appreciation}
           accent={RE}
           onChange={(v) => set("appreciation", v)}
+          info="ברירת המחדל: 4% בשנה. ב-25 השנים האחרונות מחירי הדירות עלו בממוצע כ-4.7% בשנה (למ״ס). העבר לא מבטיח את העתיד."
           hint={`בעוד ${inputs.years} שנה הדירה תהיה שווה כ-${formatCompactILS(futureValue)}. ב-25 השנים האחרונות: כ-4.7% בשנה בממוצע.`}
         />
       </Group>
@@ -513,6 +516,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
           bound={BOUNDS.spReturn}
           accent={SP}
           onChange={(v) => set("spReturn", v)}
+          info="ברירת המחדל: 9.5% בשנה בדולרים, כולל דיבידנדים, כמו הממוצע הארוך של המדד. ב-25 השנים האחרונות התשואה הייתה נמוכה יותר, כ-7.5% עד 8%."
           hint="ממוצע היסטורי: כ-9.5% עד 10% בשנה בדולרים, כולל דיבידנדים. לא מובטח."
         />
         <div>
@@ -524,6 +528,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
             bound={BOUNDS.fxDrift}
             accent={SP}
             onChange={(v) => set("fxDrift", v)}
+            info="ברירת המחדל: הדולר נחלש בחצי אחוז בשנה מול השקל, בערך הקצב הממוצע של 25 השנים האחרונות."
             hint={
               <>
                 מינוס = הדולר נחלש מול השקל. ב-20 השנים האחרונות כ-1.5%- בשנה. תשואה בשקלים:{" "}
@@ -783,6 +788,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               bound={BOUNDS.capexRate}
               accent={RE}
               onChange={(v) => set("capexRate", v)}
+              info="ברירת המחדל: 0.5% משווי הדירה בשנה, לתיקונים ושיפוצים גדולים (מעבר לתחזוקה השוטפת)."
               hint="מעבר לתחזוקה השוטפת (8% משכר הדירה): מזגן, דוד, מטבח, צבע. מחשבונים בעולם: כ-1%."
             />
             {!re.livesInNew && (
@@ -828,6 +834,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               bound={BOUNDS.rentGrowth}
               accent={RE}
               onChange={(v) => set("rentGrowth", v)}
+              info="ברירת המחדל: 3% בשנה, קרוב לעליית שכר הדירה בישראל בשנים האחרונות."
               hint="ב-2026: כ-2.8% לשוכרים ממשיכים וכ-5.5% לשוכרים חדשים."
             />
             <SliderInput
@@ -915,6 +922,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               bound={BOUNDS.spFee}
               accent={SP}
               onChange={(v) => set("spFee", v)}
+              info="דמי הניהול השנתיים בקרן או ב-ETF. ברירת המחדל: 0.15% בשנה."
             />
             <p className="pt-2 text-[12px] font-semibold text-slate-500">קרן השתלמות ומכירת התיק</p>
             <SliderInput
@@ -967,6 +975,7 @@ export default function ControlPanel({ inputs, result, set, situationLabel, sect
               value={inputs.inflation}
               bound={BOUNDS.inflation}
               onChange={(v) => set("inflation", v)}
+              info="ברירת המחדל: 2% בשנה, אמצע יעד בנק ישראל (1% עד 3%). משמשת להצמדות ולחישוב ערכי היום."
               hint="יעד בנק ישראל 1% עד 3%. התחזית ל-2027: כ-2%."
             />
             <Sources ids={["inflation"]} className="-mt-3" />

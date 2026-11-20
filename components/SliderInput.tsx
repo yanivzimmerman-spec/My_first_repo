@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
+import { Info } from "lucide-react";
 import type { Bound } from "@/lib/calculator";
 import { formatNumber, parseLooseNumber } from "@/lib/format";
 
@@ -17,6 +18,8 @@ interface Props {
   accent?: string;
   disabled?: boolean;
   decimals?: number;
+  /** "Where does this come from?": a short note behind an info button */
+  info?: ReactNode;
 }
 
 function display(v: number, kind: Kind, decimals: number) {
@@ -36,9 +39,11 @@ export default function SliderInput({
   accent = "var(--accent-ink)",
   disabled,
   decimals = 2,
+  info,
 }: Props) {
   const id = useId();
   const [draft, setDraft] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   const span = bound.max - bound.min;
   const pct = span > 0 ? ((value - bound.min) / span) * 100 : 100;
 
@@ -55,9 +60,24 @@ export default function SliderInput({
   return (
     <div>
       <div className={`mb-2.5 flex items-center justify-between gap-3 ${disabled ? "opacity-60" : ""}`}>
-        <label htmlFor={id} className="text-[15px] text-slate-700">
-          {label}
-        </label>
+        <span className="flex items-center gap-1">
+          <label htmlFor={id} className="text-[15px] text-slate-700">
+            {label}
+          </label>
+          {info && (
+            <button
+              type="button"
+              aria-expanded={infoOpen}
+              aria-controls={`${id}-info`}
+              aria-label={`מאיפה זה: ${label}`}
+              title="מאיפה זה?"
+              onClick={() => setInfoOpen((o) => !o)}
+              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full transition ${infoOpen ? "bg-slate-200 text-slate-900" : "text-slate-500 hover:text-slate-900"}`}
+            >
+              <Info size={15} aria-hidden />
+            </button>
+          )}
+        </span>
         <div
           dir="ltr"
           className="flex items-center rounded-full px-3 py-1 text-[15px] font-semibold tabular-nums ring-1 ring-transparent transition focus-within:ring-2"
@@ -105,6 +125,11 @@ export default function SliderInput({
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ ["--pct" as string]: `${Math.min(100, Math.max(0, pct))}%`, ["--accent" as string]: accent }}
       />
+      {info && infoOpen && (
+        <p id={`${id}-info`} className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[13px] leading-relaxed text-slate-700">
+          {info}
+        </p>
+      )}
       {hint && (
         <p id={`${id}-hint`} className="mt-2 text-[13px] leading-relaxed text-slate-500">
           {hint}
