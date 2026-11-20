@@ -24,6 +24,7 @@ import StoryCard from "./StoryCard";
 import GrowthChart from "./GrowthChart";
 import Breakdown from "./Breakdown";
 import RisksCard from "./RisksCard";
+import Sensitivity from "./Sensitivity";
 import ComboView from "./ComboView";
 import ControlPanel, { type PanelSection } from "./ControlPanel";
 import Planner from "./plan/Planner";
@@ -391,6 +392,9 @@ export default function Flow() {
                   <div className="px-2">
                     <VerdictDetails result={result} breakEven={breakEven} breakEvenRent={breakEvenR} comboLink={false} framed={false} />
                   </div>
+                </Fold>
+                <Fold title="מה הופך את התוצאה?" hint="עליית מחירים, תשואת המדד וריבית: מאיזה ערך המסלול השני מוביל">
+                  <Sensitivity inputs={result.inputs} />
                 </Fold>
                 <Fold title="ומה אם השוק יהיה קשה יותר?" hint="טווח בין תרחיש פסימי לאופטימי">
                   <ScenarioRange pess={scenarios.pess} base={result} opt={scenarios.opt} />

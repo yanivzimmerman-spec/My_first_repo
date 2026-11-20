@@ -80,7 +80,23 @@ function Row({ color, label, value }: { color: string; label: string; value: num
 export default function GrowthChart({ result, dark = false }: { result: SimResult; dark?: boolean }) {
   const pal = dark ? PALETTE.dark : PALETTE.light;
   const [view, setView] = useState<"chart" | "table">("chart");
-  const { points, crossovers } = result;
+  // Today's money by default (comparable across years); nominal on request
+  const [real, setReal] = useState(true);
+  const { crossovers } = result;
+  const infl = result.inputs.inflation / 100;
+  const points: YearPoint[] = real
+    ? result.points.map((p) => {
+        const d = Math.pow(1 + infl, p.year);
+        return {
+          ...p,
+          realEstate: p.realEstate / d,
+          sp500: p.sp500 / d,
+          diff: p.diff / d,
+          propertyValue: p.propertyValue / d,
+          mortgageBalance: p.mortgageBalance / d,
+        };
+      })
+    : result.points;
   const crossYears = new Set(crossovers.map((c) => c.year));
   const mainCross = crossovers[crossovers.length - 1];
   const last = points[points.length - 1];
@@ -91,7 +107,29 @@ export default function GrowthChart({ result, dark = false }: { result: SimResul
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-bold text-slate-900">שווי נטו לאורך השנים</h3>
-          <p className="mt-0.5 text-[13px] text-slate-500">כמה היה נשאר בכיס אילו הכול היה נמכר בסוף כל שנה (אחרי מסים ומשכנתא)</p>
+          <p className="mt-0.5 text-[13px] text-slate-500">
+            כמה היה נשאר בכיס אילו הכול היה נמכר בסוף כל שנה (אחרי מסים ומשכנתא),{" "}
+            {real ? "בערכי היום" : "בשקלים של אותה שנה"}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg bg-slate-100 p-0.5" role="group" aria-label="סוג הסכומים">
+          {(
+            [
+              [true, "ערכי היום"],
+              [false, "נומינלי"],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={real === v}
+              onClick={() => setReal(v)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium ${real === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <div className="flex rounded-lg bg-slate-100 p-0.5" role="tablist" aria-label="תצוגה">
           {(
@@ -113,6 +151,7 @@ export default function GrowthChart({ result, dark = false }: { result: SimResul
               {label}
             </button>
           ))}
+        </div>
         </div>
       </div>
 

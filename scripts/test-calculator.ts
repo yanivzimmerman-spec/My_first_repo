@@ -355,5 +355,21 @@ ok(bad === 0, "fuzz: 3000+ random/extreme/garbage inputs, all finite, LTV never 
   ok(sent.startsWith("בהנחות שהזנתם") && !/כדאי|מומלץ/.test(sent), "verdict sentence: describes, never advises");
 }
 
+// What flips the result
+{
+  const { flipPoint, flipSentence } = await import("../lib/sensitivity.ts");
+  const fa = flipPoint(DEFAULT_INPUTS, "appreciation");
+  const be = breakEvenAppreciation(DEFAULT_INPUTS);
+  ok(fa.leader === "sp500" && fa.flipAt !== null && be.value !== null && near(fa.flipAt, be.value, 0.01), "flip: price growth flip = the break-even");
+  const fs = flipPoint(DEFAULT_INPUTS, "spReturn");
+  ok(fs.flipAt !== null && fs.flipAt < DEFAULT_INPUTS.spReturn, "flip: a lower S&P return flips it");
+  const below = simulate({ ...DEFAULT_INPUTS, spReturn: fs.flipAt! - 0.1 });
+  ok(below.realEstate.netWorth > below.sp500.netWorth, "flip: just past the S&P flip point, the apartment leads");
+  const fm = flipPoint(DEFAULT_INPUTS, "mortgageRate");
+  ok(fm.flipAt === null || fm.flipAt < DEFAULT_INPUTS.mortgageRate, "flip: only a lower mortgage rate can help the apartment");
+  ok(flipSentence(fs).includes("הדירה מוביל") || flipSentence(fs).includes("הדירה"), "flip sentence names the other track");
+  ok(simulate(DEFAULT_INPUTS).realEstate.netWorth === simulate({ ...DEFAULT_INPUTS }).realEstate.netWorth, "flip: engine untouched");
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nAll tests passed");

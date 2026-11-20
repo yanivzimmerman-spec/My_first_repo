@@ -1,7 +1,7 @@
 // Legal guardrails (no affiliate links, no contact collection, no financial data on a server): see lib/config.ts
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Share2, Check, Moon, Sun, Mail, Copy } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { DEFAULT_INPUTS, breakEvenAppreciation, breakEvenRent, simulate, BOUNDS, type SimInputs } from "@/lib/calculator";
@@ -15,6 +15,7 @@ import Breakdown from "./Breakdown";
 import StoryCard from "./StoryCard";
 import ScenarioRange from "./ScenarioRange";
 import RisksCard from "./RisksCard";
+import Sensitivity from "./Sensitivity";
 import RiskGauges from "./RiskGauges";
 import ComboView from "./ComboView";
 import SituationPicker from "./SituationPicker";
@@ -87,6 +88,8 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
   }, [inputs, hydrated]);
 
   const result = useMemo(() => simulate(inputs), [inputs]);
+  // Heavier extras (sensitivity) follow the inputs without blocking slider drags
+  const deferredInputs = useDeferredValue(result.inputs);
   const breakEven = useMemo(() => breakEvenAppreciation(inputs), [inputs]);
   const breakEvenRentResult = useMemo(() => breakEvenRent(inputs), [inputs]);
   // Pessimistic / optimistic: shift the market assumptions for both tracks together
@@ -292,14 +295,14 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
         Layout: phone = answer → inputs → chart → details (one column).
         Desktop (RTL) = inputs in a sticky right column, results on the left.
       */}
-      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_auto_auto_1fr] lg:items-start lg:gap-8">
+      <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_auto_auto_auto_1fr] lg:items-start lg:gap-8">
         <div className="min-w-0 lg:col-start-2 lg:row-start-1">
           <VerdictBanner result={result} breakEven={breakEven} breakEvenRent={breakEvenRentResult} guideLink={withGuide} onRules={() => openPage("rules")} />
         </div>
 
         <aside
           aria-label="הנתונים שלכם"
-          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-6 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
+          className="min-w-0 lg:sticky lg:top-6 lg:col-start-1 lg:row-span-7 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:thin]"
         >
           <ControlPanel
             inputs={result.inputs}
@@ -311,6 +314,10 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
 
         <div className="min-w-0 lg:col-start-2">
           <ScenarioRange pess={scenarios.pess} base={result} opt={scenarios.opt} />
+        </div>
+
+        <div className="min-w-0 lg:col-start-2">
+          <Sensitivity inputs={deferredInputs} />
         </div>
 
         <div className="min-w-0 lg:col-start-2">
