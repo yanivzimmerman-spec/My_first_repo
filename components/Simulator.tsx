@@ -25,7 +25,7 @@ import Disclaimer from "./Disclaimer";
 import { InfoPageView, InfoLinks, INFO_PAGES, type InfoPage } from "./InfoPages";
 import { track, startTracking, PRIVACY_NOTE } from "@/lib/track";
 import { profileFromInputs, encodePlan, decodePlan, type Profile, type PlanState } from "@/lib/plan";
-import { CONTACT_EMAIL as FEEDBACK_EMAIL, SHARE_ENDING } from "@/lib/config";
+import { CONTACT_EMAIL as FEEDBACK_EMAIL, SHARE_ENDING, LEGAL_NOTE, NEUTRAL_LINE } from "@/lib/config";
 
 /** Static single-file build (claude.ai page): no query-string routing there. */
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "1";
@@ -392,7 +392,9 @@ export default function Simulator({ withGuide = false }: { withGuide?: boolean }
           )}
         </div>
       </footer>
-      <div className="mt-4 text-[12.5px] text-slate-500">
+      <div className="mt-4 space-y-2 text-[12.5px] text-slate-500">
+        <p className="font-semibold text-slate-600">{NEUTRAL_LINE}</p>
+        <p>{LEGAL_NOTE}</p>
         <InfoLinks onOpen={openPage} />
       </div>
     </div>

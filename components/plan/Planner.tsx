@@ -43,7 +43,7 @@ import { Switch, Segmented } from "../Toggle";
 import VerdictBanner from "../VerdictBanner";
 import RiskGauges from "../RiskGauges";
 import { track, PRIVACY_NOTE } from "@/lib/track";
-import { SHARE_ENDING } from "@/lib/config";
+import { SHARE_ENDING, NEUTRAL_LINE } from "@/lib/config";
 import SimNote from "../SimNote";
 import { InfoLinks, type InfoPage } from "../InfoPages";
 import ComboView from "../ComboView";
@@ -448,9 +448,10 @@ export default function Planner({
       </div>
 
       <p className="mt-10 text-[12px] leading-relaxed text-slate-500">
-        זה לא ייעוץ השקעות, ייעוץ מס או ייעוץ משכנתאות. הכלי מחשב מה קורה לפי ההנחות שבחרתם ולפי כללי המס והבנקאות בישראל,
+        זה לא ייעוץ השקעות, ייעוץ מס, ייעוץ משפטי או ייעוץ משכנתאות. הכלי מחשב מה קורה לפי ההנחות שבחרתם ולפי כללי המס והבנקאות בישראל,
         בפישוט, ולא מתחשב בכל הצרכים שלכם. החלטה כדאי לבדוק עם בעל רישיון.
       </p>
+      <p className="mt-2 text-[12px] font-semibold leading-relaxed text-slate-600">{NEUTRAL_LINE}</p>
       <p className="mt-2 text-[12px] leading-relaxed text-slate-500">{PRIVACY_NOTE}</p>
       {onPage && (
         <div className="mt-3 text-[12px] text-slate-500">

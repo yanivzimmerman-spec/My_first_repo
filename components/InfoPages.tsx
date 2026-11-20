@@ -259,6 +259,11 @@ export function InfoPageView({ page, onBack }: { page: InfoPage; onBack: () => v
         → חזרה
       </button>
       <h1 className="text-2xl font-bold text-slate-900 sm:text-[28px]">{title}</h1>
+      {(page === "terms" || page === "privacy") && (
+        <p role="note" className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-[13px] font-bold text-amber-900">
+          טיוטה – לבדיקת עו״ד
+        </p>
+      )}
       <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
         {page === "terms" && <Terms />}
         {page === "privacy" && <Privacy />}

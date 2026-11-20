@@ -70,7 +70,7 @@ export default function Disclaimer({ show }: { show: boolean }) {
         </h2>
         <div id="disclaimer-text" className="mt-2 space-y-2 text-[14.5px] leading-relaxed text-slate-700">
           <p>זו סימולציה שמחשבת לפי ההנחות שאתם בוחרים.</p>
-          <p>היא לא ייעוץ השקעות, לא ייעוץ מס ולא ייעוץ משכנתאות, ולא מתחשבת בכל הצרכים שלכם.</p>
+          <p>היא לא ייעוץ השקעות, לא ייעוץ מס, לא ייעוץ משפטי ולא ייעוץ משכנתאות, ולא מתחשבת בכל הצרכים שלכם.</p>
         </div>
         <button
           ref={button}

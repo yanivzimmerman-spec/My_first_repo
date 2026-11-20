@@ -31,7 +31,7 @@ import Planner from "./plan/Planner";
 import StatsView from "./StatsView";
 import Disclaimer from "./Disclaimer";
 import { InfoPageView, InfoLinks, INFO_PAGES, type InfoPage } from "./InfoPages";
-import { CONTACT_EMAIL as FEEDBACK_EMAIL, SHARE_ENDING } from "@/lib/config";
+import { CONTACT_EMAIL as FEEDBACK_EMAIL, SHARE_ENDING, LEGAL_NOTE, NEUTRAL_LINE } from "@/lib/config";
 
 const START: SimInputs = { ...DEFAULT_INPUTS, ...situationInputs(SITUATIONS[0]) };
 type QView = "money" | "home" | "market" | "extras";
@@ -332,6 +332,7 @@ export default function Flow() {
                   <span className="text-re">דירה</span> או <span className="text-sp-ink">S&P 500</span>: מה יוצא בחישוב?
                 </h1>
                 <p className="mt-2 text-[15px] text-slate-600">בחרו את המצב שלכם, ונחשב יחד, צעד אחר צעד, לפי הנתונים וההנחות שלכם.</p>
+                <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-[12.5px] font-medium text-slate-700">{NEUTRAL_LINE}</p>
                 <SituationPicker
                   inputs={result.inputs}
                   set={set}
@@ -458,9 +459,10 @@ export default function Flow() {
           </main>
 
           <footer className="mt-12 space-y-3 border-t border-slate-200 pt-5 text-[12px] leading-relaxed text-slate-500">
+            <p className="font-semibold text-slate-600">{NEUTRAL_LINE}</p>
             <p>
-              סימולציה לצורכי המחשה בלבד, על הנחות קבועות ומפושטות שבחרתם. היא לא ייעוץ השקעות, ייעוץ מס או ייעוץ משכנתאות,
-              ולא מתחשבת בכל הצרכים שלכם.
+              {LEGAL_NOTE} החישוב מבוסס על הנחות קבועות ומפושטות שבחרתם, ואינו מתחשב בכל הצרכים שלכם. הוא גם אינו ייעוץ
+              משכנתאות.
             </p>
             <p>{PRIVACY_NOTE}</p>
             <InfoLinks onOpen={(p) => go(p)} />

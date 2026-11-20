@@ -16,5 +16,11 @@ export const CONTACT_EMAIL = "yanivzimmerman@gmail.com";
 /** Fixed line on every result and summary screen. */
 export const SIM_NOTE = "סימולציה לפי ההנחות שלכם. לא המלצה.";
 
+/** Visible next to results and in the footer. */
+export const LEGAL_NOTE = "סימולציה כללית בלבד, אינה ייעוץ השקעות, ייעוץ מס או ייעוץ משפטי.";
+
+/** Neutral positioning, shown on the first screen and in the footer. */
+export const NEUTRAL_LINE = "כלי עצמאי: לא מתווך, לא בנק, לא יועץ. בלי לידים ובלי עמלות.";
+
 /** Last line of every shared or copied text. */
 export const SHARE_ENDING = "סימולציה לפי הנחות. לא ייעוץ.";
